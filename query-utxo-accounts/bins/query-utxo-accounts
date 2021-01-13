@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""Usage: query-utxo-accounts --rosetta-url=STRING --csv-file=FILE --out-file=FILE
+
+Options:
+    --rosetta-url <string>  url serving rosetta API
+    --csv-file <file>  csv file to load accounts/addresses from
+    --out-file <file>  output file to store json utxo dump of all addresses
+"""
+
+from docopt import docopt
+
+import json
+import openapi_client
+from openapi_client.rest import ApiException
+from csv import reader
+
+def get_utxo_for_address(address, rosetta_url):
+    # Defining the host is optional and defaults to http://localhost
+    # See configuration.py for a list of all supported configuration parameters.
+    configuration = openapi_client.Configuration(
+        host = rosetta_url,
+    )
+    configuration.debug = True
+    # Enter a context with an instance of the API client
+    with openapi_client.ApiClient(configuration) as api_client:
+        # Create an instance of the API class
+        network_api_instance = openapi_client.NetworkApi(api_client)
+        account_api_instance = openapi_client.AccountApi(api_client)
+        metadata_request = openapi_client.MetadataRequest() # MetadataRequest |
+
+        try:
+            # Get List of Available Networks
+            network_identifier = network_api_instance.network_list(metadata_request).network_identifiers[0]
+        except ApiException as e:
+            print("Exception when calling NetworkApi->network_list: %s\n" % e)
+        network_request = openapi_client.NetworkRequest(network_identifier)
+        try:
+            network_status = network_api_instance.network_status(network_request)
+        except ApiException as e:
+            print("Exception when calling NetworkApi->network_status: %s\n" % e)
+
+        account_identifier = openapi_client.AccountIdentifier(address)
+        block_identifier = network_status.current_block_identifier
+        utxo_request = openapi_client.AccountBalanceRequest(network_identifier, account_identifier, block_identifier) # BlockRequest |
+        try:
+            # Get a Block
+            balance_request = account_api_instance.account_balance(utxo_request)
+            coins = balance_request.coins
+            for coin in coins:
+                if int(coin.amount.value) > 1000000:
+                    return { "txin": coin.coin_identifier.identifier.replace(":", "#"), "amount": coin.amount.value }
+            else:
+                raise ApiException(f"No utxo for {address} has at least 5 ada balance")
+        except ApiException as e:
+            print("Exception when calling AccountApi->account_balance: %s\n" % e)
+
+arguments = docopt(__doc__)
+out_file = arguments["--out-file"]
+csv_file = arguments["--csv-file"]
+rosetta_url = arguments["--rosetta-url"]
+
+utxo = {}
+
+with open(csv_file, 'r') as csv_file:
+    csv_reader = reader(csv_file)
+    for row in csv_reader:
+        account = row[0]
+        address = row[1]
+        try:
+            print(f"querying utxo for account {account} with address {address}")
+            utxo_single = get_utxo_for_address(address, rosetta_url)
+            if utxo_single:
+                utxo[address] = utxo_single
+        except:
+            print(f"Unable to find a suitable utxo for address {address} of account {account}. skipping...")
+with open(out_file, 'w') as json_file:
+    json_file.write(json.dumps(utxo))
+
+print(f"UTXO dump for all accounts stored in {out_file}")

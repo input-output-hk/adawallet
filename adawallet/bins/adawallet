@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Ada Wallet
+
+Usage:
+    adawallet create [--testnet]
+    adawallet restore [--testnet]
+    adawallet hw-wallet [--testnet]
+    adawallet import-accounts -s 0 -e 7
+    adawallet load-utxo --snapshot=FILE
+    adawallet fetch-utxos -s 0 -e 7 [--rosetta-url=URL]
+    adawallet witness-pool-transactions -s 0 -e 7 --pool-transactions=FILE
+    adawallet delegate-pools --delegations=FILE
+    adawallet send-funds --account 0 --address addr1q8ugkffj2mvs9stmcjxcsm3tfxpsn9dzt5whyq9u4vjq4cgzft2upy983gut8q23q3c92h60r9nvxs267acrma9z9pmst5p439 --amount 5000000 --ttl 5000000
+    adawallet sign-tx --account 0 --tx-body-file FILE --out-file FILE [--stake]
+    adawallet witness-tx --account 0 --tx-body-file FILE --out-file FILE [--payment | --stake]
+    adawallet wipe
+
+
+Options:
+    -h --help                   Show this screen
+    --version                   Show version
+    -s --start=<INT>            Starting account
+    -e --end=<INT>              Ending account
+    -t --testnet                Use testnet addresses
+    --snapshot=<FILE>           UTXO snapshot to load into database
+    --pool-transactions=<FILE>  Tarball containing transactions with pool registration certificates
+    --delegation=<FILE>         JSON file containing map of accounts to pool ids
+    --rosetta-url=<URL>         Rosetta URL (default: https://explorer.cardano.org/rosetta)
+    --account=<INT>             Account of wallet to use
+    --amount=<INT>              Amount to send
+    --address=<STRING>          Receiving address
+    --ttl=<INT>                 Time to live for transaction
+    --out-file=<FILE>           Output file
+    --tx-body-file=<FILE>       Body of TX
+    --payment                   Sign/Witness with payment key
+    --stake                     Sign/Witness with stake key
+"""
+
+import os
+from docopt import docopt
+from adawallet.lib import AdaWallet, input_mnemonic
+
+arguments = docopt(__doc__, version='Ada Wallet 1.0')
+state_dir = os.getenv('ADAWALLET_STATE', './state-adawallet')
+
+adawallet = AdaWallet(state_dir)
+if arguments['wipe']:
+    adawallet.wipe()
+    exit(0)
+
+elif arguments['create']:
+    testnet = arguments['--testnet']
+    adawallet.wipe()
+    adawallet.initialize(testnet)
+    mnemonic = adawallet.create_wallet_mnemonic()
+    mnemonic_words = " ".join(mnemonic)
+    print(f"Mnemonic is: {mnemonic_words}")
+    print("Securely store mnemonic or all funds could be lost!!!")
+    exit(0)
+
+elif arguments['hw-wallet']:
+    testnet = arguments['--testnet']
+    adawallet.wipe()
+    adawallet.initialize(testnet)
+    adawallet.initialize_hardware_wallet()
+    print("Initialized adawallet to work with a hardware wallet")
+    exit(0)
+
+elif arguments['restore']:
+    testnet = arguments['--testnet']
+    adawallet.wipe()
+    adawallet.initialize(testnet)
+    mnemonic = input_mnemonic()
+    adawallet.load_wallet_from_mnemonic(mnemonic)
+    exit(0)
+
+elif arguments['import-accounts']:
+    if adawallet.wallet_initialized:
+        adawallet.import_accounts(int(arguments["--start"]), int(arguments["--end"]))
+        exit(0)
+    else:
+        print("No wallet exists. Please run create, hw-wallet or restore first")
+        exit(1)
+
+elif arguments['sign-tx']:
+    if adawallet.wallet_initialized:
+        if not arguments["--account"]:
+            print("Must specify account to sign transaction with")
+            exit(1)
+        if not (arguments["--out-file"] and arguments["--tx-body-file"]):
+            print("Must include --tx-body-file and --out-file flags")
+            exit(1)
+        adawallet.sign_tx(int(arguments["--account"]), arguments["--tx-body-file"], arguments["--out-file"], arguments["--stake"])
+        exit(0)
+    else:
+        print("No wallet exists. Please run create, hw-wallet or restore first")
+        exit(1)
