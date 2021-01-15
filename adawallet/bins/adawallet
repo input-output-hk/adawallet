@@ -95,3 +95,27 @@ elif arguments['sign-tx']:
     else:
         print("No wallet exists. Please run create, hw-wallet or restore first")
         exit(1)
+
+elif arguments['witness-tx']:
+    if adawallet.wallet_initialized:
+        if not arguments["--account"]:
+            print("Must specify account to sign transaction with")
+            exit(1)
+        if not (arguments["--out-file"] and arguments["--tx-body-file"]):
+            print("Must include --tx-body-file and --out-file flags")
+            exit(1)
+        if arguments["--payment"] and arguments["--stake"]:
+            print("Can only use one of --payment or --stake flags")
+            exit(1)
+        elif arguments["--payment"]:
+            adawallet.witness_tx(int(arguments["--account"]), arguments["--tx-body-file"], arguments["--out-file"], "payment")
+            exit(0)
+        elif arguments["--stake"]:
+            adawallet.witness_tx(int(arguments["--account"]), arguments["--tx-body-file"], arguments["--out-file"], "stake")
+            exit(0)
+        else:
+            print("Most specify --payment or --stake flag")
+            exit(1)
+    else:
+        print("No wallet exists. Please run create, hw-wallet or restore first")
+        exit(1)

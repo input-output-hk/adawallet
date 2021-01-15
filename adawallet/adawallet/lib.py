@@ -389,3 +389,66 @@ class AdaWallet:
             os.unlink(payment_skey)
             os.unlink(stake_skey)
             return
+
+    def witness_tx(self, account, tx_body, out_file, role):
+        if account not in self.accounts:
+            self.import_account(account)
+
+        if self.hardware_wallet:
+            (hws_handle, hws) = tempfile.mkstemp()
+            signing_args = []
+            self.write_key_file(hws, self.accounts[account][f"{role}_skey"])
+            signing_args.extend(["--hw-signing-file", hws])
+
+            cli_args = [
+                "cardano-hw-cli",
+                "shelley",
+                "transaction",
+                "witness",
+                *self.magic_args,
+                "--tx-body-file",
+                tx_body,
+                "--out-file",
+                out_file,
+                *signing_args
+            ]
+            p = subprocess.run(cli_args, capture_output=True, text=True)
+            if p.returncode != 0 or not os.path.exists(out_file):
+                print(" ".join(cli_args))
+                # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
+                print(p.stdout)
+                print(p.stderr)
+                os.close(hws_handle)
+                os.unlink(hws)
+                raise Exception(f"Unknown error witnessing transaction with account {account}")
+            os.close(hws_handle)
+            os.unlink(hws)
+            return
+        else:
+            (skey_handle, skey) = tempfile.mkstemp()
+            signing_args = []
+            self.write_key_file(skey, self.accounts[account][f"{role}_skey"])
+            signing_args.extend(["--signing-key-file", skey])
+
+            cli_args = [
+                "cardano-cli",
+                "transaction",
+                "witness",
+                "--tx-body-file",
+                tx_body,
+                "--out-file",
+                out_file,
+                *signing_args
+            ]
+            p = subprocess.run(cli_args, capture_output=True, text=True)
+            if p.returncode != 0 or not os.path.exists(out_file):
+                print(" ".join(cli_args))
+                # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
+                print(p.stdout)
+                print(p.stderr)
+                os.close(skey_handle)
+                os.unlink(skey)
+                raise Exception(f"Unknown error witnessing transaction with account {account}")
+            os.close(skey_handle)
+            os.unlink(skey)
+            return
