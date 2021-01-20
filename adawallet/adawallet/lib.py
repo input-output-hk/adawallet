@@ -9,8 +9,8 @@ import apsw
 from pathlib import Path
 
 # openapi client for rosetta
-import openapi_client
-from openapi_client.rest import ApiException
+import cardano_rosetta
+from cardano_rosetta.rest import ApiException
 
 def input_mnemonic():
     data = input('Input 1st word or entire mnemonic: ')
@@ -565,41 +565,40 @@ class AdaWallet:
     def get_utxos_for_address(self, address):
         # Defining the host is optional and defaults to http://localhost
         # See configuration.py for a list of all supported configuration parameters.
-        configuration = openapi_client.Configuration(
+        configuration = cardano_rosetta.Configuration(
             host = self.rosetta_url,
         )
-        configuration.debug = True
         # Enter a context with an instance of the API client
-        with openapi_client.ApiClient(configuration) as api_client:
-            # Create an instance of the API class
-            network_api_instance = openapi_client.NetworkApi(api_client)
-            account_api_instance = openapi_client.AccountApi(api_client)
-            metadata_request = openapi_client.MetadataRequest() # MetadataRequest |
+        api_client = cardano_rosetta.ApiClient(configuration)
+        # Create an instance of the API class
+        network_api_instance = cardano_rosetta.NetworkApi(api_client)
+        account_api_instance = cardano_rosetta.AccountApi(api_client)
+        metadata_request = cardano_rosetta.MetadataRequest() # MetadataRequest |
 
-            try:
-                # Get List of Available Networks
-                network_identifier = network_api_instance.network_list(metadata_request).network_identifiers[0]
-            except ApiException as e:
-                print("Exception when calling NetworkApi->network_list: %s\n" % e)
-            network_request = openapi_client.NetworkRequest(network_identifier)
-            try:
-                network_status = network_api_instance.network_status(network_request)
-            except ApiException as e:
-                print("Exception when calling NetworkApi->network_status: %s\n" % e)
+        try:
+            # Get List of Available Networks
+            network_identifier = network_api_instance.network_list(metadata_request).network_identifiers[0]
+        except ApiException as e:
+            print("Exception when calling NetworkApi->network_list: %s\n" % e)
+        network_request = cardano_rosetta.NetworkRequest(network_identifier)
+        try:
+            network_status = network_api_instance.network_status(network_request)
+        except ApiException as e:
+            print("Exception when calling NetworkApi->network_status: %s\n" % e)
 
-            account_identifier = openapi_client.AccountIdentifier(address)
-            block_identifier = network_status.current_block_identifier
-            utxo_request = openapi_client.AccountBalanceRequest(network_identifier, account_identifier, block_identifier) # BlockRequest |
-            try:
-                # Get a Block
-                balance_request = account_api_instance.account_balance(utxo_request)
-                coins = balance_request.coins
-                utxos = []
-                for coin in coins:
-                    if coin.amount.currency.symbol == 'ADA':
-                        (txid, index) = coin.coin_identifier.identifier.split(":")
-                        amount = coin.amount.value
-                        utxos.append((txid, index, address, coin.amount.value))
-                return utxos
-            except ApiException as e:
-                print("Exception when calling AccountApi->account_balance: %s\n" % e)
+        account_identifier = cardano_rosetta.AccountIdentifier(address)
+        block_identifier = network_status.current_block_identifier
+        utxo_request = cardano_rosetta.AccountBalanceRequest(network_identifier, account_identifier, block_identifier) # BlockRequest |
+        try:
+            # Get a Block
+            balance_request = account_api_instance.account_balance(utxo_request)
+            coins = balance_request.coins
+            utxos = []
+            for coin in coins:
+                if coin.amount.currency.symbol == 'ADA':
+                    (txid, index) = coin.coin_identifier.identifier.split(":")
+                    amount = coin.amount.value
+                    utxos.append((txid, index, address, coin.amount.value))
+            return utxos
+        except ApiException as e:
+            print("Exception when calling AccountApi->account_balance: %s\n" % e)

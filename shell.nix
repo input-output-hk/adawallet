@@ -6,9 +6,9 @@ let
     cardano-hw-cli
     cardano-address
     cardano-completions
-    query-utxo-accounts
     python3Packages.ipython
     python3Packages.apsw
+    cardano-rosetta-py
     adawallet
     srm
   ];

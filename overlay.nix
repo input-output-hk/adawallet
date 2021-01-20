@@ -34,18 +34,25 @@ in self: super: {
       sha256 = "sha256-KTz8PF0T+mKkLSP4XaoMmOPrLjxEqwylTrMUzWmqKfA=";
     };
   });
-  query-utxo-accounts = self.python3Packages.buildPythonApplication {
-    pname = "query-utxo-accounts";
-    version = "0.0.0";
-    src = ./query-utxo-accounts;
-    propagatedBuildInputs = [ self.cardano-rosetta-python self.python3Packages.docopt ];
-    doCheck = false;
-  };
   adawallet = self.python3Packages.buildPythonApplication {
     pname = "adawallet";
     version = "0.0.0";
     src = ./adawallet;
-    propagatedBuildInputs = [ self.query-utxo-accounts self.python3Packages.docopt ];
+    propagatedBuildInputs = [ self.cardano-rosetta-py self.python3Packages.docopt ];
+    doCheck = false;
+  };
+  cardano-rosetta-py = let
+    src = self.runCommand "cardano-rosetta-py-src" { buildInputs = [ self.openapi-generator-cli ]; } ''
+      mkdir $out
+      cd $out
+      openapi-generator-cli generate -i ${sources.cardano-rosetta}/cardano-rosetta-server/src/server/openApi.json -g python-experimental --additional-properties=packageName=cardano_rosetta
+    '';
+  in self.python3Packages.buildPythonPackage {
+    inherit src;
+    version = "0.0.0";
+    #nativeBuildInputs = with self.python3Packages; [ six ];
+    propagatedBuildInputs = with self.python3Packages; [ certifi urllib3 dateutil ];
+    pname = "cardano-rosetta-py";
     doCheck = false;
   };
 }
