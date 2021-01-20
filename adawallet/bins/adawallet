@@ -2,12 +2,12 @@
 """Ada Wallet
 
 Usage:
-    adawallet create [--testnet]
-    adawallet restore [--testnet]
-    adawallet hw-wallet [--testnet]
+    adawallet create [--testnet] [--rosetta-url=URL]
+    adawallet restore [--testnet] [--rosetta-url=URL]
+    adawallet hw-wallet [--testnet] [--rosetta-url=URL]
     adawallet import-accounts -s 0 -e 7
     adawallet load-utxo --snapshot=FILE
-    adawallet fetch-utxos -s 0 -e 7 [--rosetta-url=URL]
+    adawallet fetch-utxos
     adawallet witness-pool-transactions -s 0 -e 7 --pool-transactions=FILE
     adawallet delegate-pools --delegations=FILE
     adawallet send-funds --account 0 --address addr1q8ugkffj2mvs9stmcjxcsm3tfxpsn9dzt5whyq9u4vjq4cgzft2upy983gut8q23q3c92h60r9nvxs267acrma9z9pmst5p439 --amount 5000000 --ttl 5000000
@@ -25,7 +25,7 @@ Options:
     --snapshot=<FILE>           UTXO snapshot to load into database
     --pool-transactions=<FILE>  Tarball containing transactions with pool registration certificates
     --delegation=<FILE>         JSON file containing map of accounts to pool ids
-    --rosetta-url=<URL>         Rosetta URL (default: https://explorer.cardano.org/rosetta)
+    --rosetta-url=<URL>         Rosetta URL [default: https://explorer.cardano.org/rosetta]
     --account=<INT>             Account of wallet to use
     --amount=<INT>              Amount to send
     --address=<STRING>          Receiving address
@@ -51,7 +51,8 @@ if arguments['wipe']:
 elif arguments['create']:
     testnet = arguments['--testnet']
     adawallet.wipe()
-    adawallet.initialize(testnet)
+    adawallet.initialize(testnet, arguments['--rosetta-url'])
+    adawallet.initialize_hardware_wallet()
     mnemonic = adawallet.create_wallet_mnemonic()
     mnemonic_words = " ".join(mnemonic)
     print(f"Mnemonic is: {mnemonic_words}")
@@ -61,7 +62,7 @@ elif arguments['create']:
 elif arguments['hw-wallet']:
     testnet = arguments['--testnet']
     adawallet.wipe()
-    adawallet.initialize(testnet)
+    adawallet.initialize(testnet, arguments['--rosetta-url'])
     adawallet.initialize_hardware_wallet()
     print("Initialized adawallet to work with a hardware wallet")
     exit(0)
@@ -69,7 +70,7 @@ elif arguments['hw-wallet']:
 elif arguments['restore']:
     testnet = arguments['--testnet']
     adawallet.wipe()
-    adawallet.initialize(testnet)
+    adawallet.initialize(testnet, arguments['--rosetta-url'])
     mnemonic = input_mnemonic()
     adawallet.load_wallet_from_mnemonic(mnemonic)
     exit(0)
@@ -116,6 +117,14 @@ elif arguments['witness-tx']:
         else:
             print("Most specify --payment or --stake flag")
             exit(1)
+    else:
+        print("No wallet exists. Please run create, hw-wallet or restore first")
+        exit(1)
+
+elif arguments['fetch-utxos']:
+    if adawallet.wallet_initialized:
+        adawallet.update_utxos_for_accounts()
+        print("All account utxos updated")
     else:
         print("No wallet exists. Please run create, hw-wallet or restore first")
         exit(1)

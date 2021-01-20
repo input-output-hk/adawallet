@@ -8,6 +8,10 @@ import sys
 import apsw
 from pathlib import Path
 
+# openapi client for rosetta
+import openapi_client
+from openapi_client.rest import ApiException
+
 def input_mnemonic():
     data = input('Input 1st word or entire mnemonic: ')
     words = data.split(" ")
@@ -32,8 +36,9 @@ class AdaWallet:
         self.wallet_initialized = False
         self.load_state()
 
-    def initialize(self, testnet):
+    def initialize(self, testnet, rosetta_url="https://explorer.cardano.org/rosetta"):
         self.testnet = testnet
+        self.rosetta_url = rosetta_url
         self.state_dir.mkdir(parents=True, exist_ok=True)
         db_exists = os.path.exists(self.state_dir / "data.sqlite")
         self.db = apsw.Connection(str((self.state_dir / "data.sqlite").resolve()))
@@ -43,7 +48,7 @@ class AdaWallet:
 
     def initialize_db(self):
         cursor = self.db.cursor()
-        cursor.execute("create table status(hw_wallet,root_key,testnet)")
+        cursor.execute("create table status(hw_wallet,root_key,testnet,rosetta_url)")
         cursor.execute("create table utxo(txid,tx_index,address,amount)")
         cursor.execute("create table accounts(id,payment_vkey,payment_skey,stake_vkey,stake_skey,address,stake_address)")
 
@@ -59,6 +64,7 @@ class AdaWallet:
             self.hardware_wallet = row[0]
             self.root_key = row[1]
             self.testnet = row[2]
+            self.rosetta_url = row[3]
             if self.testnet:
                 self.magic_args = ["--testnet-magic", "0"]
             else:
@@ -97,7 +103,7 @@ class AdaWallet:
 
     def initialize_hardware_wallet(self):
         cursor = self.db.cursor()
-        cursor.execute("insert into status values(?,?,?)", (True, None, self.testnet))
+        cursor.execute("insert into status values(?,?,?,?)", (True, None, self.testnet, self.rosetta_url))
         self.hardware_wallet = True
 
     def create_wallet_mnemonic(self):
@@ -127,7 +133,7 @@ class AdaWallet:
             raise Exception("Unknown error converting mnemonic to root key")
         root_key = p.stdout.rstrip()
         cursor = self.db.cursor()
-        cursor.execute("insert into status values(?,?,?)", (False, root_key, self.testnet))
+        cursor.execute("insert into status values(?,?,?,?)", (False, root_key, self.testnet, self.rosetta_url))
 
     def read_key_file(self, filename):
         with open(filename, "r") as fname:
@@ -138,9 +144,21 @@ class AdaWallet:
             f.write(contents)
 
     def import_accounts(self, start, end):
-        for i in range(start, end + 1):
-            self.import_account(i, reload_state=False)
+        if self.hardware_wallet:
+            # HW wallet bulk import with one click
+            self.import_accounts_hw(start, end, reload_state=False)
+        else:
+            for i in range(start, end + 1):
+                self.import_account(i, reload_state=False)
         self.load_state()
+
+    def import_accounts_hw(self, start, end, reload_state=True):
+        account_indexes = range(start, end + 1)
+        accounts = self.derive_account_keys_bulk_hw(account_indexes)
+        for account_keys in accounts:
+            self.write_account(account_keys)
+        if reload_state:
+            self.load_state()
 
     def import_account(self, account, reload_state=True):
         if account not in self.accounts:
@@ -148,10 +166,14 @@ class AdaWallet:
             stake_vkey, stake_skey = self.derive_account_keys(account, "stake")
             address = self.build_address(payment_vkey, stake_vkey)
             stake_address = self.build_stake_address(stake_vkey)
-            cursor = self.db.cursor()
-            cursor.execute("insert into accounts values(?,?,?,?,?,?,?)", (account, payment_vkey, payment_skey, stake_vkey, stake_skey, address, stake_address))
+            account_keys = (account, payment_vkey, payment_skey, stake_vkey, stake_skey, address, stake_address)
+            self.write_account(account_keys)
         if reload_state:
             self.load_state()
+
+    def write_account(self, account_keys):
+        cursor = self.db.cursor()
+        cursor.execute("insert into accounts values(?,?,?,?,?,?,?)", account_keys)
 
     def build_address(self, payment_vkey, stake_vkey):
         (payment_handle, payment) = tempfile.mkstemp()
@@ -200,6 +222,50 @@ class AdaWallet:
         os.close(stake_handle)
         os.unlink(stake)
         return p.stdout.rstrip()
+
+    def derive_account_keys_bulk_hw(self, account_indexes):
+        if self.hardware_wallet:
+            accounts = []
+            account_args = []
+            key_files = []
+            for i in account_indexes:
+                (payment_vkey_handle, payment_vkey) = tempfile.mkstemp()
+                (payment_hws_handle, payment_hws) = tempfile.mkstemp()
+                (stake_vkey_handle, stake_vkey) = tempfile.mkstemp()
+                (stake_hws_handle, stake_hws) = tempfile.mkstemp()
+                account_args.extend(["--path", f"1852H/1815H/{i}H/0/0", "--hw-signing-file", payment_hws, "--verification-key-file", payment_vkey])
+                account_args.extend(["--path", f"1852H/1815H/{i}H/2/0", "--hw-signing-file", stake_hws, "--verification-key-file", stake_vkey])
+                key_files.append((i, payment_vkey_handle, payment_vkey, payment_hws_handle, payment_hws, stake_vkey_handle, stake_vkey, stake_hws_handle, stake_hws))
+
+            cli_args = [
+                "cardano-hw-cli",
+                "shelley",
+                "address",
+                "key-gen",
+                *account_args
+            ]
+            p = subprocess.run(cli_args, capture_output=True, text=True)
+            if p.returncode != 0:
+                print(p.stderr)
+                os.close(payment_vkey_handle)
+                os.close(payment_hws_handle)
+                os.unlink(payment_vkey)
+                os.unlink(payment_hws)
+                os.close(stake_vkey_handle)
+                os.close(stake_hws_handle)
+                os.unlink(stake_vkey)
+                os.unlink(stake_hws)
+                raise Exception(f"Unknown error extracting bulk accounts from hardware wallet")
+            for account,payment_vkey_handle, payment_vkey, payment_hws_handle, payment_hws, stake_vkey_handle, stake_vkey, stake_hws_handle, stake_hws in key_files:
+                if account not in self.accounts:
+                    payment_hws_contents = self.read_key_file(payment_hws)
+                    payment_vkey_contents = self.read_key_file(payment_vkey)
+                    stake_hws_contents = self.read_key_file(stake_hws)
+                    stake_vkey_contents = self.read_key_file(stake_vkey)
+                    address = self.build_address(payment_vkey_contents, stake_vkey_contents)
+                    stake_address = self.build_stake_address(stake_vkey_contents)
+                    accounts.append((account, payment_vkey_contents, payment_hws_contents, stake_vkey_contents, stake_hws_contents, address, stake_address))
+            return accounts
 
     def derive_account_keys(self, account, role):
         if role == "stake":
@@ -452,3 +518,63 @@ class AdaWallet:
             os.close(skey_handle)
             os.unlink(skey)
             return
+
+    def clear_utxo_table(self):
+        cursor = self.db.cursor()
+        cursor.execute("delete from utxo")
+
+    def update_utxos_for_accounts(self, reload_state=False):
+        self.clear_utxo_table()
+        cursor = self.db.cursor()
+        for account,details in self.accounts.items():
+            utxos = self.get_utxos_for_address(details["address"])
+            for utxo in utxos:
+                cursor.execute("insert into utxo values(?,?,?,?)", utxo)
+        if reload_state:
+            self.load_state()
+
+    def get_rewards_for_stake_address(self, stake_address):
+        # TODO: query for rewards when rosetta supports it
+        return 0
+
+    def get_utxos_for_address(self, address):
+        # Defining the host is optional and defaults to http://localhost
+        # See configuration.py for a list of all supported configuration parameters.
+        configuration = openapi_client.Configuration(
+            host = self.rosetta_url,
+        )
+        configuration.debug = True
+        # Enter a context with an instance of the API client
+        with openapi_client.ApiClient(configuration) as api_client:
+            # Create an instance of the API class
+            network_api_instance = openapi_client.NetworkApi(api_client)
+            account_api_instance = openapi_client.AccountApi(api_client)
+            metadata_request = openapi_client.MetadataRequest() # MetadataRequest |
+
+            try:
+                # Get List of Available Networks
+                network_identifier = network_api_instance.network_list(metadata_request).network_identifiers[0]
+            except ApiException as e:
+                print("Exception when calling NetworkApi->network_list: %s\n" % e)
+            network_request = openapi_client.NetworkRequest(network_identifier)
+            try:
+                network_status = network_api_instance.network_status(network_request)
+            except ApiException as e:
+                print("Exception when calling NetworkApi->network_status: %s\n" % e)
+
+            account_identifier = openapi_client.AccountIdentifier(address)
+            block_identifier = network_status.current_block_identifier
+            utxo_request = openapi_client.AccountBalanceRequest(network_identifier, account_identifier, block_identifier) # BlockRequest |
+            try:
+                # Get a Block
+                balance_request = account_api_instance.account_balance(utxo_request)
+                coins = balance_request.coins
+                utxos = []
+                for coin in coins:
+                    if coin.amount.currency.symbol == 'ADA':
+                        (txid, index) = coin.coin_identifier.identifier.split(":")
+                        amount = coin.amount.value
+                        utxos.append((txid, index, address, coin.amount.value))
+                return utxos
+            except ApiException as e:
+                print("Exception when calling AccountApi->account_balance: %s\n" % e)
