@@ -533,6 +533,31 @@ class AdaWallet:
         if reload_state:
             self.load_state()
 
+    def import_utxos_for_accounts(self, utxo_json, reload_state=False):
+        self.clear_utxo_table()
+        with open(utxo_json, 'r') as f:
+            utxos = json.load(f)
+        cursor = self.db.cursor()
+        for utxo_attrs in utxos:
+            utxo = (utxo_attrs['txid'], utxo_attrs['tx_index'], utxo_attrs['address'], utxo_attrs['amount'])
+            cursor.execute("insert into utxo values(?,?,?,?)", utxo)
+        if reload_state:
+            self.load_state()
+
+    def export_utxos_for_accounts(self, utxo_json):
+        cursor = self.db.cursor()
+        utxo_entries = []
+        rows = cursor.execute("select * from utxo")
+        for txid, tx_index, address, amount in rows:
+            utxo_entries.append({
+                    "txid": txid,
+                    "tx_index": tx_index,
+                    "address": address,
+                    "amount": amount
+            })
+        with open(utxo_json, 'w') as f:
+            f.write(json.dumps(utxo_entries))
+
     def get_rewards_for_stake_address(self, stake_address):
         # TODO: query for rewards when rosetta supports it
         return 0

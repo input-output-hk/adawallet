@@ -8,7 +8,11 @@ Usage:
     adawallet import-accounts -s 0 -e 7
     adawallet load-utxo --snapshot=FILE
     adawallet fetch-utxos
-    adawallet witness-pool-transactions -s 0 -e 7 --pool-transactions=FILE
+    adawallet import-utxos --utxo-file=FILE
+    adawallet export-utxos --utxo-file=FILE
+    adawallet witness-pool-transactions --pool-transactions=FILE
+    adawallet stake-registration --account 0
+    adawallet bulk-stake-registration
     adawallet delegate-pools --delegations=FILE
     adawallet send-funds --account 0 --address addr1q8ugkffj2mvs9stmcjxcsm3tfxpsn9dzt5whyq9u4vjq4cgzft2upy983gut8q23q3c92h60r9nvxs267acrma9z9pmst5p439 --amount 5000000 --ttl 5000000
     adawallet sign-tx --account 0 --tx-body-file FILE --out-file FILE [--stake]
@@ -32,8 +36,9 @@ Options:
     --ttl=<INT>                 Time to live for transaction
     --out-file=<FILE>           Output file
     --tx-body-file=<FILE>       Body of TX
-    --payment                   Sign/Witness with payment key
+    --payment                   Witness with payment key
     --stake                     Sign/Witness with stake key
+    --utxo-file=<FILE>          JSON file containing utxos
 """
 
 import os
@@ -125,6 +130,26 @@ elif arguments['fetch-utxos']:
     if adawallet.wallet_initialized:
         adawallet.update_utxos_for_accounts()
         print("All account utxos updated")
+    else:
+        print("No wallet exists. Please run create, hw-wallet or restore first")
+        exit(1)
+
+elif arguments['import-utxos']:
+    if adawallet.wallet_initialized:
+        if not arguments["--utxo-file"]:
+            print("Must include --utxo-file")
+            exit(1)
+        adawallet.import_utxos_for_accounts(arguments["--utxo-file"])
+    else:
+        print("No wallet exists. Please run create, hw-wallet or restore first")
+        exit(1)
+
+elif arguments['export-utxos']:
+    if adawallet.wallet_initialized:
+        if not arguments["--utxo-file"]:
+            print("Must include --utxo-file")
+            exit(1)
+        adawallet.export_utxos_for_accounts(arguments["--utxo-file"])
     else:
         print("No wallet exists. Please run create, hw-wallet or restore first")
         exit(1)
