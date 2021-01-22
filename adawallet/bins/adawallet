@@ -15,10 +15,10 @@ Usage:
     adawallet export-accounts --accounts-file=FILE
     adawallet import-accounts --accounts-file=FILE
     adawallet witness-pool-transactions --pool-transactions=FILE
-    adawallet stake-registration --account 0 [--sign]
+    adawallet stake-registration --account 0 --fee 210000 --out-file FILE [--ttl 5000000] [--sign] [--deposit 2000000]
     adawallet bulk-stake-registration [--sign]
     adawallet delegate-pools --delegations=FILE [--sign]
-    adawallet send-funds --account 0 --address addr1q8ugkffj2mvs9stmcjxcsm3tfxpsn9dzt5whyq9u4vjq4cgzft2upy983gut8q23q3c92h60r9nvxs267acrma9z9pmst5p439 --amount 5000000 --ttl 5000000 [--sign]
+    adawallet send-tx --account 0 --address addr1q8ugkffj2mvs9stmcjxcsm3tfxpsn9dzt5whyq9u4vjq4cgzft2upy983gut8q23q3c92h60r9nvxs267acrma9z9pmst5p439 --amount 5000000 --fee 200000 --out-file FILE [--ttl 5000000] [--sign]
     adawallet sign-tx --account 0 --tx-body-file FILE --out-file FILE [--stake]
     adawallet witness-tx --account 0 --tx-body-file FILE --out-file FILE [--payment | --stake]
     adawallet bulk-tx --recipients FILE --account 0 --fee 170000 --out-file FILE [--sign]
@@ -37,6 +37,7 @@ Options:
     --rosetta-url=<URL>         Rosetta URL [default: https://explorer.cardano.org/rosetta]
     --account=<INT>             Account of wallet to use
     --fee=<INT>                 Fee to use for transaction
+    --deposit=<INT>             Total deposits in transaction [default: 2000000]
     --amount=<INT>              Amount to send
     --address=<STRING>          Receiving address
     --ttl=<INT>                 Time to live for transaction
@@ -105,7 +106,7 @@ elif arguments['import-accounts']:
             adawallet.import_accounts(accounts_file=arguments["--accounts-file"])
         exit(0)
     else:
-        print("No wallet exists. Please run create, hw-wallet or restore first")
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
 
 elif arguments['sign-tx']:
@@ -119,7 +120,7 @@ elif arguments['sign-tx']:
         adawallet.sign_tx(int(arguments["--account"]), arguments["--tx-body-file"], arguments["--out-file"], arguments["--stake"])
         exit(0)
     else:
-        print("No wallet exists. Please run create, hw-wallet or restore first")
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
 
 elif arguments['witness-tx']:
@@ -143,7 +144,7 @@ elif arguments['witness-tx']:
             print("Most specify --payment or --stake flag")
             exit(1)
     else:
-        print("No wallet exists. Please run create, hw-wallet or restore first")
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
 
 elif arguments['fetch-utxos']:
@@ -151,7 +152,7 @@ elif arguments['fetch-utxos']:
         adawallet.update_utxos_for_accounts()
         print("All account utxos updated")
     else:
-        print("No wallet exists. Please run create, hw-wallet or restore first")
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
 
 elif arguments['import-utxos']:
@@ -161,7 +162,7 @@ elif arguments['import-utxos']:
             exit(1)
         adawallet.import_utxos_for_accounts(arguments["--utxo-file"])
     else:
-        print("No wallet exists. Please run create, hw-wallet or restore first")
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
 
 elif arguments['export-utxos']:
@@ -171,7 +172,7 @@ elif arguments['export-utxos']:
             exit(1)
         adawallet.export_utxos_for_accounts(arguments["--utxo-file"])
     else:
-        print("No wallet exists. Please run create, hw-wallet or restore first")
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
 
 elif arguments['export-accounts']:
@@ -181,7 +182,7 @@ elif arguments['export-accounts']:
             exit(1)
         adawallet.export_accounts(arguments["--accounts-file"])
     else:
-        print("No wallet exists. Please run create, hw-wallet or restore first")
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
 
 elif arguments['import-accounts']:
@@ -191,7 +192,7 @@ elif arguments['import-accounts']:
             exit(1)
         adawallet.import_accounts(arguments["--accounts-file"])
     else:
-        print("No wallet exists. Please run create, hw-wallet or restore first")
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
 
 elif arguments['get-ttl']:
@@ -203,7 +204,7 @@ elif arguments['get-ttl']:
             ttl = tip + 5000
         print(ttl)
     else:
-        print("No wallet exists. Please run create, hw-wallet or restore first")
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
 
 elif arguments['bulk-tx']:
@@ -223,11 +224,51 @@ elif arguments['bulk-tx']:
         if not arguments["--out-file"]:
             print("Must include --out-file")
             exit(1)
-        if arguments["--ttl"]:
-            ttl = arguments["--ttl"]
-        else:
-            ttl = None
-        adawallet.bulk_tx(int(arguments["--account"]), int(arguments["--fee"]), recipients, arguments["--out-file"], ttl, sign=arguments["--sign"])
+        in_total, out_total, fee, change = adawallet.build_tx(int(arguments["--account"]), arguments["--out-file"], int(arguments["--fee"]), txouts=recipients, ttl=arguments["--ttl"], sign=arguments["--sign"])
+        print(f"Transaction created sending {out_total} with change remaining of {change} at a fee of {fee}")
     else:
-        print("No wallet exists. Please run create, hw-wallet or restore first")
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
+        exit(1)
+
+elif arguments['send-tx']:
+    if adawallet.wallet_initialized:
+        if not arguments["--account"]:
+            print("Must include --account")
+            exit(1)
+        if not arguments["--address"]:
+            print("Must include --address")
+            exit(1)
+        if not arguments["--amount"]:
+            print("Must include --amount")
+            exit(1)
+        if not arguments["--fee"]:
+            print("Must include --fee")
+            exit(1)
+        if not arguments["--out-file"]:
+            print("Must include --out-file")
+            exit(1)
+        address = arguments["--address"]
+        amount = arguments["--amount"]
+        recipients = { f"{address}": int(amount) }
+        in_total, out_total, fee, change = adawallet.build_tx(int(arguments["--account"]), arguments["--out-file"], int(arguments["--fee"]), txouts=recipients, ttl=arguments["--ttl"], sign=arguments["--sign"])
+        print(f"Transaction created sending {out_total} with change remaining of {change} at a fee of {fee}")
+    else:
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
+        exit(1)
+
+elif arguments['stake-registration']:
+    if adawallet.wallet_initialized:
+        if not arguments["--account"]:
+            print("Must include --account")
+            exit(1)
+        if not arguments["--fee"]:
+            print("Must include --fee")
+            exit(1)
+        if not arguments["--out-file"]:
+            print("Must include --out-file")
+            exit(1)
+        in_total, out_total, fee, change = adawallet.stake_registration_tx(int(arguments["--account"]), arguments["--out-file"], int(arguments["--fee"]), deposit=int(arguments["--deposit"]), ttl=arguments["--ttl"], sign=arguments["--sign"])
+        print(f"Transaction created with registration certificate sending {out_total} with change remaining of {change} at a fee of {fee}")
+    else:
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)

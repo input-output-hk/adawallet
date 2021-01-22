@@ -641,53 +641,87 @@ class AdaWallet:
             utxos.append((row[0], row[1], int(row[3])))
         return utxos
 
-    def bulk_tx(self, account, fee, recipients, out_file, ttl=None, sign=False):
+    def stake_registration_tx(self, account, out_file, fee, ttl=None, sign=False, deposit=2000000):
+        (cert_handle, stake_registration_certificate) = tempfile.mkstemp()
+        (vkey_handle, vkey) = tempfile.mkstemp()
+        self.write_key_file(vkey, self.accounts[account]["stake_vkey"])
+        cli_args = [
+            "cardano-cli",
+            "stake-address",
+            "registration-certificate",
+            "--stake-verification-key-file",
+            vkey,
+            "--out-file",
+            stake_registration_certificate
+        ]
+        p = subprocess.run(cli_args, capture_output=True, text=True)
+        if p.returncode != 0:
+            print(" ".join(cli_args))
+            # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
+            print(p.stdout)
+            print(p.stderr)
+            os.close(cert_handle)
+            os.unlink(stake_registration_certificate)
+            os.close(vkey_handle)
+            os.unlink(vkey)
+            raise Exception(f"Unknown error generating stake registration certificate for account {account}")
+        result = self.build_tx(account, out_file, fee, certificates=[stake_registration_certificate], ttl=ttl, sign=sign, deposit=deposit, stake=True)
+        os.close(cert_handle)
+        os.unlink(stake_registration_certificate)
+        os.close(vkey_handle)
+        os.unlink(vkey)
+        return result
+
+    def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False):
         if not ttl:
             ttl = self.get_slot_tip() + 5000
         account_address = self.accounts[account]["address"]
-        txins = []
-        txouts = []
         out_total = 0
         in_total = 0
-
-        for txid, index, value in self.fetch_utxos_address(account_address):
-            txins.extend(["--tx-in", f"{txid}#{index}"])
-            in_total += value
-            pass
-
-        for address, value in recipients.items():
-            txouts.extend(["--tx-out", f"{address}+{value}"])
-            out_total += value
-
-        change = in_total - out_total - fee
-        if change > 1000000:
-            txouts.extend(["--tx-out", f"{account_address}+{change}"])
-        elif change < 0:
-            raise Exception("Error generating transaction, not enough funds")
-        elif change >= 1000000:
-            fee = change + fee
-        else:
-            raise Exception("Error generating transaction, unknown error calculating change")
 
         cli_args = [
           "cardano-cli",
           "transaction",
           "build-raw",
-          *txins,
-          *txouts,
-          "--fee",
-          str(fee),
           "--ttl",
           str(ttl),
           "--out-file",
           out_file
         ]
+
+        for txid, index, value in self.fetch_utxos_address(account_address):
+            cli_args.extend(["--tx-in", f"{txid}#{index}"])
+            in_total += value
+
+        for address, value in txouts.items():
+            cli_args.extend(["--tx-out", f"{address}+{value}"])
+            out_total += value
+
+        for address, value in withdrawals.items():
+            cli_args.extend(["--withdrawal", f"{address}+{value}"])
+            in_total += value
+
+        for certificate in certificates:
+            cli_args.extend(["--certificate", certificate])
+
+        change = in_total - out_total - fee - deposit
+        if change > 1000000:
+            cli_args.extend(["--tx-out", f"{account_address}+{change}"])
+        elif change >= 1000000:
+            fee = change + fee
+        elif change < 0:
+            raise Exception("Error generating transaction, not enough funds")
+        else:
+            raise Exception("Error generating transaction, unknown error calculating change")
+        cli_args.extend(["--fee", str(fee)])
+
         p = subprocess.run(cli_args, capture_output=True, text=True)
         if p.returncode != 0:
             print(p.stderr)
             raise Exception("Unknown error creating bulk transaction")
         if sign:
-            self.sign_tx(account, out_file, out_file)
+            self.sign_tx(account, out_file, out_file, stake=stake)
+        return((in_total, out_total, fee, change))
 
     def get_utxos_for_address(self, address):
         # Create an instance of the API class
