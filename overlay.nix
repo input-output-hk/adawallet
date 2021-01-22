@@ -45,7 +45,7 @@ in self: super: {
     src = self.runCommand "cardano-rosetta-py-src" { buildInputs = [ self.openapi-generator-cli ]; } ''
       mkdir $out
       cd $out
-      openapi-generator-cli generate -i ${sources.cardano-rosetta}/cardano-rosetta-server/src/server/openApi.json -g python-experimental --additional-properties=packageName=cardano_rosetta
+      openapi-generator-cli generate -i ${sources.cardano-rosetta}/cardano-rosetta-server/src/server/openApi.json -g python --additional-properties=packageName=cardano_rosetta
     '';
   in self.python3Packages.buildPythonPackage {
     inherit src;

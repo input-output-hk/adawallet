@@ -2,21 +2,26 @@
 """Ada Wallet
 
 Usage:
-    adawallet create [--testnet] [--rosetta-url=URL]
-    adawallet restore [--testnet] [--rosetta-url=URL]
-    adawallet hw-wallet [--testnet] [--rosetta-url=URL]
-    adawallet import-accounts -s 0 -e 7
+    adawallet init-create [--testnet] [--rosetta-url=URL]
+    adawallet init-restore [--testnet] [--rosetta-url=URL]
+    adawallet init-hardware [--testnet] [--rosetta-url=URL]
+    adawallet init-read-only [--testnet] [--rosetta-url=URL]
+    adawallet import-accounts -s 0 -e 7 [--accounts-file=FILE]
     adawallet load-utxo --snapshot=FILE
     adawallet fetch-utxos
+    adawallet get-ttl [--seconds=INT]
     adawallet import-utxos --utxo-file=FILE
     adawallet export-utxos --utxo-file=FILE
+    adawallet export-accounts --accounts-file=FILE
+    adawallet import-accounts --accounts-file=FILE
     adawallet witness-pool-transactions --pool-transactions=FILE
-    adawallet stake-registration --account 0
-    adawallet bulk-stake-registration
-    adawallet delegate-pools --delegations=FILE
-    adawallet send-funds --account 0 --address addr1q8ugkffj2mvs9stmcjxcsm3tfxpsn9dzt5whyq9u4vjq4cgzft2upy983gut8q23q3c92h60r9nvxs267acrma9z9pmst5p439 --amount 5000000 --ttl 5000000
+    adawallet stake-registration --account 0 [--sign]
+    adawallet bulk-stake-registration [--sign]
+    adawallet delegate-pools --delegations=FILE [--sign]
+    adawallet send-funds --account 0 --address addr1q8ugkffj2mvs9stmcjxcsm3tfxpsn9dzt5whyq9u4vjq4cgzft2upy983gut8q23q3c92h60r9nvxs267acrma9z9pmst5p439 --amount 5000000 --ttl 5000000 [--sign]
     adawallet sign-tx --account 0 --tx-body-file FILE --out-file FILE [--stake]
     adawallet witness-tx --account 0 --tx-body-file FILE --out-file FILE [--payment | --stake]
+    adawallet bulk-tx --recipients FILE --account 0 --fee 170000 --out-file FILE [--sign]
     adawallet wipe
 
 
@@ -31,6 +36,7 @@ Options:
     --delegation=<FILE>         JSON file containing map of accounts to pool ids
     --rosetta-url=<URL>         Rosetta URL [default: https://explorer.cardano.org/rosetta]
     --account=<INT>             Account of wallet to use
+    --fee=<INT>                 Fee to use for transaction
     --amount=<INT>              Amount to send
     --address=<STRING>          Receiving address
     --ttl=<INT>                 Time to live for transaction
@@ -38,10 +44,14 @@ Options:
     --tx-body-file=<FILE>       Body of TX
     --payment                   Witness with payment key
     --stake                     Sign/Witness with stake key
+    --sign                      Sign Transaction
     --utxo-file=<FILE>          JSON file containing utxos
+    --seconds=<INT>             Seconds from now for tx to live
+    --recipients=<FILE>         JSON list of funds to send
 """
 
 import os
+import json
 from docopt import docopt
 from adawallet.lib import AdaWallet, input_mnemonic
 
@@ -53,7 +63,7 @@ if arguments['wipe']:
     adawallet.wipe()
     exit(0)
 
-elif arguments['create']:
+elif arguments['init-create']:
     testnet = arguments['--testnet']
     adawallet.wipe()
     adawallet.initialize(testnet, arguments['--rosetta-url'])
@@ -64,7 +74,7 @@ elif arguments['create']:
     print("Securely store mnemonic or all funds could be lost!!!")
     exit(0)
 
-elif arguments['hw-wallet']:
+elif arguments['init-hardware']:
     testnet = arguments['--testnet']
     adawallet.wipe()
     adawallet.initialize(testnet, arguments['--rosetta-url'])
@@ -72,7 +82,7 @@ elif arguments['hw-wallet']:
     print("Initialized adawallet to work with a hardware wallet")
     exit(0)
 
-elif arguments['restore']:
+elif arguments['init-restore']:
     testnet = arguments['--testnet']
     adawallet.wipe()
     adawallet.initialize(testnet, arguments['--rosetta-url'])
@@ -80,9 +90,19 @@ elif arguments['restore']:
     adawallet.load_wallet_from_mnemonic(mnemonic)
     exit(0)
 
+elif arguments['init-read-only']:
+    testnet = arguments['--testnet']
+    adawallet.wipe()
+    adawallet.initialize(testnet, arguments['--rosetta-url'])
+    adawallet.initialize_read_only()
+    exit(0)
+
 elif arguments['import-accounts']:
     if adawallet.wallet_initialized:
-        adawallet.import_accounts(int(arguments["--start"]), int(arguments["--end"]))
+        if arguments["--start"] and arguments["--end"]:
+            adawallet.import_accounts(int(arguments["--start"]), int(arguments["--end"]))
+        if arguments["--accounts-file"]:
+            adawallet.import_accounts(accounts_file=arguments["--accounts-file"])
         exit(0)
     else:
         print("No wallet exists. Please run create, hw-wallet or restore first")
@@ -150,6 +170,64 @@ elif arguments['export-utxos']:
             print("Must include --utxo-file")
             exit(1)
         adawallet.export_utxos_for_accounts(arguments["--utxo-file"])
+    else:
+        print("No wallet exists. Please run create, hw-wallet or restore first")
+        exit(1)
+
+elif arguments['export-accounts']:
+    if adawallet.wallet_initialized:
+        if not arguments["--accounts-file"]:
+            print("Must include --accounts-file")
+            exit(1)
+        adawallet.export_accounts(arguments["--accounts-file"])
+    else:
+        print("No wallet exists. Please run create, hw-wallet or restore first")
+        exit(1)
+
+elif arguments['import-accounts']:
+    if adawallet.wallet_initialized:
+        if not arguments["--accounts-file"]:
+            print("Must include --accounts-file")
+            exit(1)
+        adawallet.import_accounts(arguments["--accounts-file"])
+    else:
+        print("No wallet exists. Please run create, hw-wallet or restore first")
+        exit(1)
+
+elif arguments['get-ttl']:
+    if adawallet.wallet_initialized:
+        tip = int(adawallet.get_slot_tip())
+        if arguments['--seconds']:
+            ttl = tip + int(arguments['--seconds'])
+        else:
+            ttl = tip + 5000
+        print(ttl)
+    else:
+        print("No wallet exists. Please run create, hw-wallet or restore first")
+        exit(1)
+
+elif arguments['bulk-tx']:
+    if adawallet.wallet_initialized:
+        if arguments["--recipients"]:
+            with open(arguments["--recipients"]) as f:
+                recipients = json.load(f)
+        else:
+            print("Must include --recipients")
+            exit(1)
+        if not arguments["--account"]:
+            print("Must include --account")
+            exit(1)
+        if not arguments["--fee"]:
+            print("Must include --fee")
+            exit(1)
+        if not arguments["--out-file"]:
+            print("Must include --out-file")
+            exit(1)
+        if arguments["--ttl"]:
+            ttl = arguments["--ttl"]
+        else:
+            ttl = None
+        adawallet.bulk_tx(int(arguments["--account"]), int(arguments["--fee"]), recipients, arguments["--out-file"], ttl, sign=arguments["--sign"])
     else:
         print("No wallet exists. Please run create, hw-wallet or restore first")
         exit(1)

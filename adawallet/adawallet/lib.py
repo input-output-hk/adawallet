@@ -64,7 +64,14 @@ class AdaWallet:
             self.hardware_wallet = row[0]
             self.root_key = row[1]
             self.testnet = row[2]
-            self.rosetta_url = row[3]
+            if row[3]:
+                self.rosetta_url = row[3]
+                configuration = cardano_rosetta.Configuration(
+                    host = self.rosetta_url,
+                )
+                # uncomment to debug rosetta
+                # configuration.debug = True
+                self.rosetta_client = cardano_rosetta.ApiClient(configuration)
             if self.testnet:
                 self.magic_args = ["--testnet-magic", "0"]
             else:
@@ -106,6 +113,11 @@ class AdaWallet:
         cursor.execute("insert into status values(?,?,?,?)", (True, None, self.testnet, self.rosetta_url))
         self.hardware_wallet = True
 
+    def initialize_read_only(self):
+        cursor = self.db.cursor()
+        cursor.execute("insert into status values(?,?,?,?)", (None, None, self.testnet, self.rosetta_url))
+
+
     def create_wallet_mnemonic(self):
         cli_args = [
             "cardano-address",
@@ -143,13 +155,18 @@ class AdaWallet:
         with open(name, "w") as f:
             f.write(contents)
 
-    def import_accounts(self, start, end):
+    def import_accounts(self, start=None, end=None, accounts_file=None):
         if self.hardware_wallet:
             # HW wallet bulk import with one click
             self.import_accounts_hw(start, end, reload_state=False)
-        else:
+        elif start and end:
             for i in range(start, end + 1):
                 self.import_account(i, reload_state=False)
+        elif accounts_file:
+            with open(accounts_file) as f:
+                accounts = json.load(f)
+            for account in accounts:
+                self.import_account(account, reload_state=False)
         self.load_state()
 
     def import_accounts_hw(self, start, end, reload_state=True):
@@ -161,15 +178,33 @@ class AdaWallet:
             self.load_state()
 
     def import_account(self, account, reload_state=True):
-        if account not in self.accounts:
-            payment_vkey, payment_skey = self.derive_account_keys(account, "payment")
-            stake_vkey, stake_skey = self.derive_account_keys(account, "stake")
-            address = self.build_address(payment_vkey, stake_vkey)
-            stake_address = self.build_stake_address(stake_vkey)
-            account_keys = (account, payment_vkey, payment_skey, stake_vkey, stake_skey, address, stake_address)
+        print(type(account))
+        if type(account) == int:
+            print(account["index"])
+            if account not in self.accounts:
+                payment_vkey, payment_skey = self.derive_account_keys(account, "payment")
+                stake_vkey, stake_skey = self.derive_account_keys(account, "stake")
+                address = self.build_address(payment_vkey, stake_vkey)
+                stake_address = self.build_stake_address(stake_vkey)
+                account_keys = (account, payment_vkey, payment_skey, stake_vkey, stake_skey, address, stake_address)
+                self.write_account(account_keys)
+        elif type(account) == dict and account["index"] not in self.accounts:
+            account_keys = (account["index"], account["payment_vkey"], account["payment_skey"], account["stake_vkey"], account["stake_skey"], account["address"], account["stake_address"])
             self.write_account(account_keys)
         if reload_state:
             self.load_state()
+
+    def export_accounts(self, out_file):
+        cursor = self.db.cursor()
+        accounts = []
+        for account_index, value in self.accounts.items():
+            account = value.copy()
+            account["index"] = account_index
+            account["payment_skey"] = None
+            account["stake_skey"] = None
+            accounts.append(account)
+        with open(out_file, 'w') as f:
+            f.write(json.dumps(accounts))
 
     def write_account(self, account_keys):
         cursor = self.db.cursor()
@@ -377,7 +412,7 @@ class AdaWallet:
             os.unlink(skey)
             return (vkey_contents, skey_contents)
 
-    def sign_tx(self, account, tx_body, out_file, stake):
+    def sign_tx(self, account, tx_body, out_file, stake=False):
         if account not in self.accounts:
             self.import_account(account)
 
@@ -419,7 +454,7 @@ class AdaWallet:
             os.unlink(payment_hws)
             os.unlink(stake_hws)
             return
-        else:
+        elif self.accounts[account]["payment_skey"]:
             (payment_skey_handle, payment_skey) = tempfile.mkstemp()
             (stake_skey_handle, stake_skey) = tempfile.mkstemp()
             signing_args = []
@@ -455,6 +490,7 @@ class AdaWallet:
             os.unlink(payment_skey)
             os.unlink(stake_skey)
             return
+        raise Exception(f"No signing key available for account {account}")
 
     def witness_tx(self, account, tx_body, out_file, role):
         if account not in self.accounts:
@@ -490,7 +526,7 @@ class AdaWallet:
             os.close(hws_handle)
             os.unlink(hws)
             return
-        else:
+        elif self.accounts[account][f"{role}_skey"]:
             (skey_handle, skey) = tempfile.mkstemp()
             signing_args = []
             self.write_key_file(skey, self.accounts[account][f"{role}_skey"])
@@ -518,6 +554,7 @@ class AdaWallet:
             os.close(skey_handle)
             os.unlink(skey)
             return
+        raise Exception(f"No signing key available for account {account} with role {role}")
 
     def clear_utxo_table(self):
         cursor = self.db.cursor()
@@ -562,33 +599,110 @@ class AdaWallet:
         # TODO: query for rewards when rosetta supports it
         return 0
 
-    def get_utxos_for_address(self, address):
-        # Defining the host is optional and defaults to http://localhost
-        # See configuration.py for a list of all supported configuration parameters.
-        configuration = cardano_rosetta.Configuration(
-            host = self.rosetta_url,
-        )
-        # Enter a context with an instance of the API client
-        api_client = cardano_rosetta.ApiClient(configuration)
-        # Create an instance of the API class
-        network_api_instance = cardano_rosetta.NetworkApi(api_client)
-        account_api_instance = cardano_rosetta.AccountApi(api_client)
+    def get_network_list(self):
+        network_api_instance = cardano_rosetta.NetworkApi(self.rosetta_client)
         metadata_request = cardano_rosetta.MetadataRequest() # MetadataRequest |
-
         try:
             # Get List of Available Networks
-            network_identifier = network_api_instance.network_list(metadata_request).network_identifiers[0]
+            return network_api_instance.network_list(metadata_request).network_identifiers[0]
         except ApiException as e:
             print("Exception when calling NetworkApi->network_list: %s\n" % e)
+
+    def get_network_status(self, network_identifier):
+        network_api_instance = cardano_rosetta.NetworkApi(self.rosetta_client)
         network_request = cardano_rosetta.NetworkRequest(network_identifier)
         try:
-            network_status = network_api_instance.network_status(network_request)
+            return network_api_instance.network_status(network_request)
         except ApiException as e:
             print("Exception when calling NetworkApi->network_status: %s\n" % e)
 
+    def get_block(self, block_identifier=None):
+        network_identifier = self.get_network_list()
+        if not block_identifier:
+            network_status = self.get_network_status(network_identifier)
+            block_identifier = network_status.current_block_identifier
+
+        block_request = cardano_rosetta.BlockRequest(network_identifier, block_identifier)
+        block_api_instance = cardano_rosetta.BlockApi(self.rosetta_client)
+        try:
+            return block_api_instance.block(block_request)
+        except ApiException as e:
+            print("Exception when calling BlockApi->block: %s\n" % e)
+
+    def get_slot_tip(self):
+        block = self.get_block()
+        return int(block.block.metadata.slot_no)
+
+    def fetch_utxos_address(self, address):
+        utxos = []
+        cursor = self.db.cursor()
+        rows = cursor.execute("select * from utxo WHERE address=?", (address,))
+        for row in rows:
+            utxos.append((row[0], row[1], int(row[3])))
+        return utxos
+
+    def bulk_tx(self, account, fee, recipients, out_file, ttl=None, sign=False):
+        if not ttl:
+            ttl = self.get_slot_tip() + 5000
+        account_address = self.accounts[account]["address"]
+        txins = []
+        txouts = []
+        out_total = 0
+        in_total = 0
+
+        for txid, index, value in self.fetch_utxos_address(account_address):
+            txins.extend(["--tx-in", f"{txid}#{index}"])
+            in_total += value
+            pass
+
+        for address, value in recipients.items():
+            txouts.extend(["--tx-out", f"{address}+{value}"])
+            out_total += value
+
+        change = in_total - out_total - fee
+        if change > 1000000:
+            txouts.extend(["--tx-out", f"{account_address}+{change}"])
+        elif change < 0:
+            raise Exception("Error generating transaction, not enough funds")
+        elif change >= 1000000:
+            fee = change + fee
+        else:
+            raise Exception("Error generating transaction, unknown error calculating change")
+
+        cli_args = [
+          "cardano-cli",
+          "transaction",
+          "build-raw",
+          *txins,
+          *txouts,
+          "--fee",
+          str(fee),
+          "--ttl",
+          str(ttl),
+          "--out-file",
+          out_file
+        ]
+        p = subprocess.run(cli_args, capture_output=True, text=True)
+        if p.returncode != 0:
+            print(p.stderr)
+            raise Exception("Unknown error creating bulk transaction")
+        if sign:
+            self.sign_tx(account, out_file, out_file)
+
+    def get_utxos_for_address(self, address):
+        # Create an instance of the API class
+        network_identifier = self.get_network_list()
+        network_status = self.get_network_status(network_identifier)
+
+        account_api_instance = cardano_rosetta.AccountApi(self.rosetta_client)
         account_identifier = cardano_rosetta.AccountIdentifier(address)
         block_identifier = network_status.current_block_identifier
-        utxo_request = cardano_rosetta.AccountBalanceRequest(network_identifier, account_identifier, block_identifier) # BlockRequest |
+        try:
+            block = self.get_block(block_identifier)
+        except ApiException as e:
+            print("Exception when calling BlockApi->block: %s\n" % e)
+
+        utxo_request = cardano_rosetta.AccountBalanceRequest(network_identifier, account_identifier, block) # BlockRequest |
         try:
             # Get a Block
             balance_request = account_api_instance.account_balance(utxo_request)
