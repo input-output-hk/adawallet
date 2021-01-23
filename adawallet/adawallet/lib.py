@@ -6,6 +6,7 @@ import time
 import os
 import sys
 import apsw
+import tarfile
 from pathlib import Path
 
 # openapi client for rosetta
@@ -668,6 +669,76 @@ class AdaWallet:
         result = self.build_tx(account, out_file, fee, certificates=[stake_registration_certificate], ttl=ttl, sign=sign, deposit=deposit, stake=True)
         os.close(cert_handle)
         os.unlink(stake_registration_certificate)
+        os.close(vkey_handle)
+        os.unlink(vkey)
+        return result
+
+    def bulk_stake_registration_tx(self, out_file, fee, ttl=None, deposit=2000000, sign=False):
+        if sign:
+            suffix="txsigned"
+        else:
+            suffix="txbody"
+
+        sum_result = (0, 0, 0, 0)
+
+        with open(out_file, "wb") as f:
+            with tarfile.open(fileobj=f, mode='w:gz') as tar:
+                for account,details in self.accounts.items():
+                    (tx_handle, tx) = tempfile.mkstemp(suffix, str(account))
+                    result = self.stake_registration_tx(int(account), tx, fee, ttl, sign, deposit)
+                    tar.add(tx, f"{account}.{suffix}")
+                    sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
+        return sum_result
+
+    def bulk_delegate_pool_tx(self, delegations_file, out_file, fee, ttl=None, sign=False):
+        if sign:
+            suffix="txsigned"
+        else:
+            suffix="txbody"
+
+        sum_result = (0, 0, 0, 0)
+
+        with open(delegations_file) as f:
+            delegations = json.load(f)
+        with open(out_file, "wb") as f2:
+            with tarfile.open(fileobj=f2, mode='w:gz') as tar:
+                for account,pool_id in delegations.items():
+                    (tx_handle, tx) = tempfile.mkstemp(suffix, str(account))
+                    result = self.delegate_pool_tx(int(account), pool_id, tx, fee, ttl, sign)
+                    tar.add(tx, f"{account}.{suffix}")
+                    sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
+        return sum_result
+
+
+    def delegate_pool_tx(self, account, pool_id, out_file, fee, ttl=None, sign=False):
+        (cert_handle, delegation_certificate) = tempfile.mkstemp()
+        (vkey_handle, vkey) = tempfile.mkstemp()
+        self.write_key_file(vkey, self.accounts[account]["stake_vkey"])
+        cli_args = [
+            "cardano-cli",
+            "stake-address",
+            "delegation-certificate",
+            "--stake-verification-key-file",
+            vkey,
+            "--stake-pool-id",
+            pool_id,
+            "--out-file",
+            delegation_certificate
+        ]
+        p = subprocess.run(cli_args, capture_output=True, text=True)
+        if p.returncode != 0:
+            print(" ".join(cli_args))
+            # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
+            print(p.stdout)
+            print(p.stderr)
+            os.close(cert_handle)
+            os.unlink(delegation_certificate)
+            os.close(vkey_handle)
+            os.unlink(vkey)
+            raise Exception(f"Unknown error generating stake delegation certificate for account {account}")
+        result = self.build_tx(account, out_file, fee, certificates=[delegation_certificate], ttl=ttl, sign=sign, stake=True)
+        os.close(cert_handle)
+        os.unlink(delegation_certificate)
         os.close(vkey_handle)
         os.unlink(vkey)
         return result
