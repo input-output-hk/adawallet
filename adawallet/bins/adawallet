@@ -22,9 +22,9 @@ Usage:
     adawallet send-tx --account 0 --address addr1q8ugkffj2mvs9stmcjxcsm3tfxpsn9dzt5whyq9u4vjq4cgzft2upy983gut8q23q3c92h60r9nvxs267acrma9z9pmst5p439 --amount 5000000 --fee 200000 --out-file FILE [--ttl 5000000] [--sign]
     adawallet sign-tx --account 0 --tx-body-file FILE --out-file FILE [--stake]
     adawallet witness-tx --account 0 --tx-body-file FILE --out-file FILE [--payment | --stake]
-    adawallet bulk-tx --recipients FILE --account 0 --fee 170000 --out-file FILE [--sign]
+    adawallet bulk-tx --recipients FILE --account 0 --fee 170000 --out-file FILE [--ttl 5000000] [--sign]
+    adawallet migrate-wallet --accounts-file=FILE --fee 170000 --out-file FILE [--ttl 5000000] [--sign]
     adawallet wipe
-
 
 Options:
     -h --help                   Show this screen
@@ -140,6 +140,30 @@ elif arguments['witness-tx']:
             exit(0)
         elif arguments["--stake"]:
             adawallet.witness_tx(int(arguments["--account"]), arguments["--tx-body-file"], arguments["--out-file"], "stake")
+            exit(0)
+        else:
+            print("Most specify --payment or --stake flag")
+            exit(1)
+    else:
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
+        exit(1)
+
+elif arguments['bulk-witness-tx']:
+    if adawallet.wallet_initialized:
+        if not arguments["--out-file"]:
+            print("Must include --out-file flags")
+            exit(1)
+        if not arguments["--transactions-file"]:
+            print("Must include --transactions-file flags")
+            exit(1)
+        if arguments["--payment"] and arguments["--stake"]:
+            print("Can only use one of --payment or --stake flags")
+            exit(1)
+        elif arguments["--payment"]:
+            adawallet.bulk_witness_tx(arguments["--transactions-file"], arguments["--out-file"], "payment")
+            exit(0)
+        elif arguments["--stake"]:
+            adawallet.bulk_witness_tx(arguments["--transactions-file"], arguments["--out-file"], "stake")
             exit(0)
         else:
             print("Most specify --payment or --stake flag")
@@ -321,6 +345,23 @@ elif arguments['bulk-delegate-pool-tx']:
             exit(1)
         in_total, out_total, fee, change = adawallet.bulk_delegate_pool_tx(arguments["--delegations"], arguments["--out-file"], int(arguments["--fee"]), ttl=arguments["--ttl"], sign=arguments["--sign"])
         print(f"Transactions created with delegation certificates with change remaining of {change} at a fee of {fee}")
+    else:
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
+        exit(1)
+
+elif arguments['migrate-wallet']:
+    if adawallet.wallet_initialized:
+        if not arguments["--fee"]:
+            print("Must include --fee")
+            exit(1)
+        if not arguments["--out-file"]:
+            print("Must include --out-file")
+            exit(1)
+        if not arguments["--accounts-file"]:
+            print("Must include --accounts-file")
+            exit(1)
+        in_total, out_total, fee, change = adawallet.migrate_wallet(arguments["--accounts-file"], arguments["--out-file"], int(arguments["--fee"]), ttl=arguments["--ttl"], sign=arguments["--sign"])
+        print(f"Transactions created to migrate wallet with total funds {out_total} and total fees of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)

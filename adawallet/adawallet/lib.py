@@ -248,32 +248,34 @@ class AdaWallet:
             account_args = []
             key_files = []
             for i in account_indexes:
-                with tempfile.NamedTemporaryFile("w+") as payment_vkey, tempfile.NamedTemporaryFile("w+") as payment_hws, tempfile.NamedTemporaryFile("w+") as stake_vkey, tempfile.NamedTemporaryFile("w+") as stake_hws:
-                    account_args.extend(["--path", f"1852H/1815H/{i}H/0/0", "--hw-signing-file", payment_hws.name, "--verification-key-file", payment_vkey.name])
-                    account_args.extend(["--path", f"1852H/1815H/{i}H/2/0", "--hw-signing-file", stake_hws.name, "--verification-key-file", stake_vkey.name])
-                    key_files.append((i, payment_vkey, payment_hws, stake_vkey, stake_hws))
+                payment_vkey = tempfile.NamedTemporaryFile("w+")
+                payment_hws = tempfile.NamedTemporaryFile("w+")
+                stake_vkey = tempfile.NamedTemporaryFile("w+")
+                stake_hws = tempfile.NamedTemporaryFile("w+")
+                account_args.extend(["--path", f"1852H/1815H/{i}H/0/0", "--hw-signing-file", payment_hws.name, "--verification-key-file", payment_vkey.name])
+                account_args.extend(["--path", f"1852H/1815H/{i}H/2/0", "--hw-signing-file", stake_hws.name, "--verification-key-file", stake_vkey.name])
+                key_files.append((i, payment_vkey, payment_hws, stake_vkey, stake_hws))
 
-                    cli_args = [
-                        "cardano-hw-cli",
-                        "shelley",
-                        "address",
-                        "key-gen",
-                        *account_args
-                    ]
-                    p = subprocess.run(cli_args, capture_output=True, text=True)
-                    if p.returncode != 0:
-                        print(p.stderr)
-                        raise Exception(f"Unknown error extracting bulk accounts from hardware wallet")
-                    for account, payment_vkey, payment_hws, stake_vkey, stake_hws in key_files:
-                        if account not in self.accounts:
-                            payment_hws_contents = payment_hws.read()
-                            payment_vkey_contents = payment_vkey.read()
-                            stake_hws_contents = stake_hws.read()
-                            stake_vkey_contents = stake_vkey.read()
-                            print(payment_vkey_contents)
-                            address = self.build_address(payment_vkey_contents, stake_vkey_contents)
-                            stake_address = self.build_stake_address(stake_vkey_contents)
-                            accounts.append((account, payment_vkey_contents, payment_hws_contents, stake_vkey_contents, stake_hws_contents, address, stake_address))
+            cli_args = [
+                "cardano-hw-cli",
+                "shelley",
+                "address",
+                "key-gen",
+                *account_args
+            ]
+            p = subprocess.run(cli_args, capture_output=True, text=True)
+            if p.returncode != 0:
+                print(p.stderr)
+                raise Exception(f"Unknown error extracting bulk accounts from hardware wallet")
+            for account, payment_vkey, payment_hws, stake_vkey, stake_hws in key_files:
+                if account not in self.accounts:
+                    payment_hws_contents = payment_hws.read()
+                    payment_vkey_contents = payment_vkey.read()
+                    stake_hws_contents = stake_hws.read()
+                    stake_vkey_contents = stake_vkey.read()
+                    address = self.build_address(payment_vkey_contents, stake_vkey_contents)
+                    stake_address = self.build_stake_address(stake_vkey_contents)
+                    accounts.append((account, payment_vkey_contents, payment_hws_contents, stake_vkey_contents, stake_hws_contents, address, stake_address))
             return accounts
 
     def derive_account_keys(self, account, role):
@@ -600,7 +602,7 @@ class AdaWallet:
                 print(p.stdout)
                 print(p.stderr)
                 raise Exception(f"Unknown error generating stake registration certificate for account {account}")
-            return self.build_tx(account, out_file, fee, certificates=[stake_registration_certificate], ttl=ttl, sign=sign, deposit=deposit, stake=True)
+            return self.build_tx(account, out_file, fee, certificates=[stake_registration_certificate.name], ttl=ttl, sign=sign, deposit=deposit, stake=True)
 
     def bulk_stake_registration_tx(self, out_file, fee, ttl=None, deposit=2000000, sign=False):
         if sign:
@@ -614,7 +616,7 @@ class AdaWallet:
             for account,details in self.accounts.items():
                 with tempfile.NamedTemporaryFile("w+") as tx:
                     result = self.stake_registration_tx(int(account), tx.name, fee, ttl, sign, deposit)
-                    tar.add(tx, f"{account}.{suffix}")
+                    tar.add(tx.name, f"{account}.{suffix}")
                 sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
 
@@ -633,10 +635,37 @@ class AdaWallet:
                 for account,pool_id in delegations.items():
                     with tempfile.NamedTemporaryFile("w+") as tx:
                         result = self.delegate_pool_tx(int(account), pool_id, tx.name, fee, ttl, sign)
-                        tar.add(tx, f"{account}.{suffix}")
+                        tar.add(tx.name, f"{account}.{suffix}")
                     sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
 
+    def migrate_wallet(self, accounts_file, out_file, fee, ttl=None, sign=False):
+        if sign:
+            suffix="txsigned"
+        else:
+            suffix="txbody"
+        with open(accounts_file) as f:
+            migrate_accounts = json.load(f)
+        sum_result = (0, 0, 0, 0)
+
+        with open(out_file, "wb") as f:
+            with tarfile.open(fileobj=f, mode='w:gz') as tar:
+                for account,details in self.accounts.items():
+                    with tempfile.NamedTemporaryFile("w+") as tx:
+                        account_address = details["address"]
+                        account_utxos = self.fetch_utxos_address(account_address)
+                        total_in = sum(i for _, _, i in account_utxos)
+                        output_address = None
+                        for migrate_details in migrate_accounts:
+                            if int(account) == int(migrate_details["index"]):
+                                output_address = migrate_details["address"]
+                        if not output_address:
+                            raise Exception("Error! accounts file must contain an address for every existing account to migrate")
+                        txouts = { output_address: total_in - fee }
+                        result = self.build_tx(account, tx.name, fee, txouts=txouts, ttl=ttl, sign=sign)
+                        tar.add(tx.name, f"{account}.{suffix}")
+                    sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
+        return sum_result
 
     def delegate_pool_tx(self, account, pool_id, out_file, fee, ttl=None, sign=False):
         with tempfile.NamedTemporaryFile("w+") as delegation_certificate, tempfile.NamedTemporaryFile("w+") as vkey:
@@ -660,7 +689,7 @@ class AdaWallet:
                 print(p.stdout)
                 print(p.stderr)
                 raise Exception(f"Unknown error generating stake delegation certificate for account {account}")
-            result = self.build_tx(account, out_file, fee, certificates=[delegation_certificate], ttl=ttl, sign=sign, stake=True)
+            result = self.build_tx(account, out_file, fee, certificates=[delegation_certificate.name], ttl=ttl, sign=sign, stake=True)
         return result
 
     def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False):
