@@ -14,7 +14,7 @@ Usage:
     adawallet export-utxos --utxo-file=FILE
     adawallet export-accounts --accounts-file=FILE
     adawallet import-accounts --accounts-file=FILE
-    adawallet witness-pool-transactions --pool-transactions=FILE
+    adawallet bulk-witness-tx --transactions-file=FILE [--payment | --stake]
     adawallet stake-registration-tx --account 0 --fee 210000 --out-file FILE [--ttl 5000000] [--sign] [--deposit 2000000]
     adawallet bulk-stake-registration-tx --fee 210000 --out-file FILE [--ttl 5000000] [--sign] [--deposit 2000000]
     adawallet delegate-pool-tx --account 0 --pool-id pool1y25deq9kldy9y9gfvrpw8zt05zsrfx84zjhugaxrx9ftvwdpua2 --fee 210000 --out-file FILE [--ttl 5000000] [--sign]
@@ -70,7 +70,6 @@ elif arguments['init-create']:
     testnet = arguments['--testnet']
     adawallet.wipe()
     adawallet.initialize(testnet, arguments['--rosetta-url'])
-    adawallet.initialize_hardware_wallet()
     mnemonic = adawallet.create_wallet_mnemonic()
     mnemonic_words = " ".join(mnemonic)
     print(f"Mnemonic is: {mnemonic_words}")

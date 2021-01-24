@@ -116,7 +116,7 @@ class AdaWallet:
 
     def initialize_read_only(self):
         cursor = self.db.cursor()
-        cursor.execute("insert into status values(?,?,?,?)", (None, None, self.testnet, self.rosetta_url))
+        cursor.execute("insert into status values(?,?,?,?)", (False, None, self.testnet, self.rosetta_url))
 
 
     def create_wallet_mnemonic(self):
@@ -148,19 +148,11 @@ class AdaWallet:
         cursor = self.db.cursor()
         cursor.execute("insert into status values(?,?,?,?)", (False, root_key, self.testnet, self.rosetta_url))
 
-    def read_key_file(self, filename):
-        with open(filename, "r") as fname:
-            return fname.read()
-
-    def write_key_file(self, name, contents):
-        with open(name, "w") as f:
-            f.write(contents)
-
     def import_accounts(self, start=None, end=None, accounts_file=None):
         if self.hardware_wallet:
             # HW wallet bulk import with one click
             self.import_accounts_hw(start, end, reload_state=False)
-        elif start and end:
+        elif start != None and end != None:
             for i in range(start, end + 1):
                 self.import_account(i, reload_state=False)
         elif accounts_file:
@@ -179,9 +171,7 @@ class AdaWallet:
             self.load_state()
 
     def import_account(self, account, reload_state=True):
-        print(type(account))
         if type(account) == int:
-            print(account["index"])
             if account not in self.accounts:
                 payment_vkey, payment_skey = self.derive_account_keys(account, "payment")
                 stake_vkey, stake_skey = self.derive_account_keys(account, "stake")
@@ -212,51 +202,44 @@ class AdaWallet:
         cursor.execute("insert into accounts values(?,?,?,?,?,?,?)", account_keys)
 
     def build_address(self, payment_vkey, stake_vkey):
-        (payment_handle, payment) = tempfile.mkstemp()
-        (stake_handle, stake) = tempfile.mkstemp()
-        self.write_key_file(payment, payment_vkey)
-        self.write_key_file(stake, stake_vkey)
-        cli_args = [
-            "cardano-cli",
-            "address",
-            "build",
-            *self.magic_args,
-            "--payment-verification-key-file",
-            payment,
-            "--stake-verification-key-file",
-            stake
-        ]
-        p = subprocess.run(cli_args, capture_output=True, text=True)
-        if p.returncode != 0:
-            print(p.stderr)
-            os.close(payment_handle)
-            os.close(stake_handle)
-            os.unlink(payment)
-            os.unlink(stake)
-            raise Exception(f"Unknown error building address")
-        os.close(payment_handle)
-        os.close(stake_handle)
-        os.unlink(payment)
-        os.unlink(stake)
+        with tempfile.NamedTemporaryFile("w+") as payment, tempfile.NamedTemporaryFile("w+") as stake:
+            payment.write(payment_vkey)
+            payment.flush()
+            stake.write(stake_vkey)
+            stake.flush()
+            cli_args = [
+                "cardano-cli",
+                "address",
+                "build",
+                *self.magic_args,
+                "--payment-verification-key-file",
+                payment.name,
+                "--stake-verification-key-file",
+                stake.name
+            ]
+            p = subprocess.run(cli_args, capture_output=True, text=True)
+            if p.returncode != 0:
+                print(p.stderr)
+                raise Exception(f"Unknown error building address")
         return p.stdout.rstrip()
 
     def build_stake_address(self, stake_vkey):
-        (stake_handle, stake) = tempfile.mkstemp()
-        self.write_key_file(stake, stake_vkey)
-        cli_args = [
-            "cardano-cli",
-            "stake-address",
-            "build",
-            *self.magic_args,
-            "--stake-verification-key-file",
-            stake
-        ]
-        p = subprocess.run(cli_args, capture_output=True, text=True)
-        if p.returncode != 0:
-            print(p.stderr)
-            raise Exception(f"Unknown error building stake address")
-        os.close(stake_handle)
-        os.unlink(stake)
+        with tempfile.NamedTemporaryFile("w+") as stake:
+            stake.write(stake_vkey)
+            stake.flush()
+            cli_args = [
+                "cardano-cli",
+                "stake-address",
+                "build",
+                *self.magic_args,
+                "--stake-verification-key-file",
+                stake.name
+            ]
+            p = subprocess.run(cli_args, capture_output=True, text=True)
+            if p.returncode != 0:
+                print(" ".join("cli_args"))
+                print(p.stderr)
+                raise Exception(f"Unknown error building stake address")
         return p.stdout.rstrip()
 
     def derive_account_keys_bulk_hw(self, account_indexes):
@@ -265,42 +248,32 @@ class AdaWallet:
             account_args = []
             key_files = []
             for i in account_indexes:
-                (payment_vkey_handle, payment_vkey) = tempfile.mkstemp()
-                (payment_hws_handle, payment_hws) = tempfile.mkstemp()
-                (stake_vkey_handle, stake_vkey) = tempfile.mkstemp()
-                (stake_hws_handle, stake_hws) = tempfile.mkstemp()
-                account_args.extend(["--path", f"1852H/1815H/{i}H/0/0", "--hw-signing-file", payment_hws, "--verification-key-file", payment_vkey])
-                account_args.extend(["--path", f"1852H/1815H/{i}H/2/0", "--hw-signing-file", stake_hws, "--verification-key-file", stake_vkey])
-                key_files.append((i, payment_vkey_handle, payment_vkey, payment_hws_handle, payment_hws, stake_vkey_handle, stake_vkey, stake_hws_handle, stake_hws))
+                with tempfile.NamedTemporaryFile("w+") as payment_vkey, tempfile.NamedTemporaryFile("w+") as payment_hws, tempfile.NamedTemporaryFile("w+") as stake_vkey, tempfile.NamedTemporaryFile("w+") as stake_hws:
+                    account_args.extend(["--path", f"1852H/1815H/{i}H/0/0", "--hw-signing-file", payment_hws.name, "--verification-key-file", payment_vkey.name])
+                    account_args.extend(["--path", f"1852H/1815H/{i}H/2/0", "--hw-signing-file", stake_hws.name, "--verification-key-file", stake_vkey.name])
+                    key_files.append((i, payment_vkey, payment_hws, stake_vkey, stake_hws))
 
-            cli_args = [
-                "cardano-hw-cli",
-                "shelley",
-                "address",
-                "key-gen",
-                *account_args
-            ]
-            p = subprocess.run(cli_args, capture_output=True, text=True)
-            if p.returncode != 0:
-                print(p.stderr)
-                os.close(payment_vkey_handle)
-                os.close(payment_hws_handle)
-                os.unlink(payment_vkey)
-                os.unlink(payment_hws)
-                os.close(stake_vkey_handle)
-                os.close(stake_hws_handle)
-                os.unlink(stake_vkey)
-                os.unlink(stake_hws)
-                raise Exception(f"Unknown error extracting bulk accounts from hardware wallet")
-            for account,payment_vkey_handle, payment_vkey, payment_hws_handle, payment_hws, stake_vkey_handle, stake_vkey, stake_hws_handle, stake_hws in key_files:
-                if account not in self.accounts:
-                    payment_hws_contents = self.read_key_file(payment_hws)
-                    payment_vkey_contents = self.read_key_file(payment_vkey)
-                    stake_hws_contents = self.read_key_file(stake_hws)
-                    stake_vkey_contents = self.read_key_file(stake_vkey)
-                    address = self.build_address(payment_vkey_contents, stake_vkey_contents)
-                    stake_address = self.build_stake_address(stake_vkey_contents)
-                    accounts.append((account, payment_vkey_contents, payment_hws_contents, stake_vkey_contents, stake_hws_contents, address, stake_address))
+                    cli_args = [
+                        "cardano-hw-cli",
+                        "shelley",
+                        "address",
+                        "key-gen",
+                        *account_args
+                    ]
+                    p = subprocess.run(cli_args, capture_output=True, text=True)
+                    if p.returncode != 0:
+                        print(p.stderr)
+                        raise Exception(f"Unknown error extracting bulk accounts from hardware wallet")
+                    for account, payment_vkey, payment_hws, stake_vkey, stake_hws in key_files:
+                        if account not in self.accounts:
+                            payment_hws_contents = payment_hws.read()
+                            payment_vkey_contents = payment_vkey.read()
+                            stake_hws_contents = stake_hws.read()
+                            stake_vkey_contents = stake_vkey.read()
+                            print(payment_vkey_contents)
+                            address = self.build_address(payment_vkey_contents, stake_vkey_contents)
+                            stake_address = self.build_stake_address(stake_vkey_contents)
+                            accounts.append((account, payment_vkey_contents, payment_hws_contents, stake_vkey_contents, stake_hws_contents, address, stake_address))
             return accounts
 
     def derive_account_keys(self, account, role):
@@ -311,106 +284,83 @@ class AdaWallet:
         else:
             raise Exception(f"Role {role} not supported!")
         if self.hardware_wallet:
-            (vkey_handle, vkey) = tempfile.mkstemp()
-            (hws_handle, hws) = tempfile.mkstemp()
-            cli_args = [
-                "cardano-hw-cli",
-                "shelley",
-                "address",
-                "key-gen",
-                "--path",
-                f"1852H/1815H/{account}H/{role_index}/0",
-                "--hw-signing-file",
-                hws,
-                "--verification-key-file",
-                vkey
-            ]
-            p = subprocess.run(cli_args, capture_output=True, text=True)
-            if p.returncode != 0:
-                print(p.stderr)
-                os.close(vkey_handle)
-                os.close(hws_handle)
-                os.unlink(vkey)
-                os.unlink(hws)
-                raise Exception(f"Unknown error extracting account key {account}")
-            hws_contents = self.read_key_file(hws)
-            vkey_contents = self.read_key_file(vkey)
-            os.close(vkey_handle)
-            os.close(hws_handle)
-            os.unlink(vkey)
-            os.unlink(hws)
+            with tempfile.NamedTemporaryFile("w+") as vkey, tempfile.NamedTemporaryFile("w+") as hws:
+                cli_args = [
+                    "cardano-hw-cli",
+                    "shelley",
+                    "address",
+                    "key-gen",
+                    "--path",
+                    f"1852H/1815H/{account}H/{role_index}/0",
+                    "--hw-signing-file",
+                    hws.name,
+                    "--verification-key-file",
+                    vkey.name
+                ]
+                p = subprocess.run(cli_args, capture_output=True, text=True)
+                if p.returncode != 0:
+                    print(p.stderr)
+                    raise Exception(f"Unknown error extracting account key {account}")
+                hws_contents = hws.read()
+                vkey_contents = vkey.read()
             return (vkey_contents, hws_contents)
         else:
-            (vkeyx_handle, vkeyx) = tempfile.mkstemp()
-            (vkey_handle, vkey) = tempfile.mkstemp()
-            (skey_handle, skey) = tempfile.mkstemp()
-            cli_args = [
-                "cardano-address",
-                "key",
-                "child",
-                f"1852H/1815H/{account}H/{role_index}/0",
-            ]
-            p = subprocess.run(cli_args, input=self.root_key, capture_output=True, text=True)
-            if p.returncode != 0:
-                print(p.stderr)
-                os.close(vkey_handle)
-                os.close(skey_handle)
-                os.unlink(vkey)
-                os.unlink(skey)
-                raise Exception(f"Unknown error deriving child account key for {account}")
-            child_skey = p.stdout.rstrip()
-            cli_args = [
-                "cardano-cli",
-                "key",
-                "convert-cardano-address-key",
-                f"--shelley-{role}-key",
-                "--signing-key-file",
-                "/dev/stdin",
-                "--out-file",
-                skey
-            ]
-            p = subprocess.run(cli_args, input=child_skey, capture_output=True, text=True)
-            if p.returncode != 0:
-                print(p.stderr)
-                os.close(skey_handle)
-                os.unlink(skey)
-                raise Exception(f"Unknown error converting child key to CLI format for {account}")
+            with tempfile.NamedTemporaryFile("w+") as vkeyx, tempfile.NamedTemporaryFile("w+") as vkey, tempfile.NamedTemporaryFile("w+") as skey:
+                cli_args = [
+                    "cardano-address",
+                    "key",
+                    "child",
+                    f"1852H/1815H/{account}H/{role_index}/0",
+                ]
+                p = subprocess.run(cli_args, input=self.root_key, capture_output=True, text=True)
+                if p.returncode != 0:
+                    print(p.stderr)
+                    raise Exception(f"Unknown error deriving child account key for {account}")
+                child_skey = p.stdout.rstrip()
+                cli_args = [
+                    "cardano-cli",
+                    "key",
+                    "convert-cardano-address-key",
+                    f"--shelley-{role}-key",
+                    "--signing-key-file",
+                    "/dev/stdin",
+                    "--out-file",
+                    skey.name
+                ]
+                p = subprocess.run(cli_args, input=child_skey, capture_output=True, text=True)
+                if p.returncode != 0:
+                    print(p.stderr)
+                    raise Exception(f"Unknown error converting child key to CLI format for {account}")
 
-            cli_args = [
-                "cardano-cli",
-                "key",
-                "verification-key",
-                "--signing-key-file",
-                skey,
-                "--verification-key-file",
-                vkeyx
-            ]
-            p = subprocess.run(cli_args, capture_output=True, text=True)
-            if p.returncode != 0:
-                print(p.stderr)
-                raise Exception(f"Unknown error converting signing key to verification extended key for {account}")
+                cli_args = [
+                    "cardano-cli",
+                    "key",
+                    "verification-key",
+                    "--signing-key-file",
+                    skey.name,
+                    "--verification-key-file",
+                    vkeyx.name
+                ]
+                p = subprocess.run(cli_args, capture_output=True, text=True)
+                if p.returncode != 0:
+                    print(p.stderr)
+                    raise Exception(f"Unknown error converting signing key to verification extended key for {account}")
 
-            cli_args = [
-                "cardano-cli",
-                "key",
-                "non-extended-key",
-                "--extended-verification-key-file",
-                vkeyx,
-                "--verification-key-file",
-                vkey
-            ]
-            p = subprocess.run(cli_args, capture_output=True, text=True)
-            if p.returncode != 0:
-                print(p.stderr)
-                raise Exception(f"Unknown error converting verification extended key to verification key for {account}")
-            skey_contents = self.read_key_file(skey)
-            vkey_contents = self.read_key_file(vkey)
-            os.close(vkey_handle)
-            os.close(vkeyx_handle)
-            os.close(skey_handle)
-            os.unlink(vkey)
-            os.unlink(vkeyx)
-            os.unlink(skey)
+                cli_args = [
+                    "cardano-cli",
+                    "key",
+                    "non-extended-key",
+                    "--extended-verification-key-file",
+                    vkeyx.name,
+                    "--verification-key-file",
+                    vkey.name
+                ]
+                p = subprocess.run(cli_args, capture_output=True, text=True)
+                if p.returncode != 0:
+                    print(p.stderr)
+                    raise Exception(f"Unknown error converting verification extended key to verification key for {account}")
+                skey_contents = skey.read()
+                vkey_contents = vkey.read()
             return (vkey_contents, skey_contents)
 
     def sign_tx(self, account, tx_body, out_file, stake=False):
@@ -418,142 +368,130 @@ class AdaWallet:
             self.import_account(account)
 
         if self.hardware_wallet:
-            (payment_hws_handle, payment_hws) = tempfile.mkstemp()
-            (stake_hws_handle, stake_hws) = tempfile.mkstemp()
-            signing_args = []
-            self.write_key_file(payment_hws, self.accounts[account]["payment_skey"])
-            signing_args.extend(["--hw-signing-file", payment_hws])
+            with tempfile.NamedTemporaryFile("w+") as payment_hws, tempfile.NamedTemporaryFile("w+") as stake_hws:
+                signing_args = []
+                payment_hws.write(self.accounts[account]["payment_skey"])
+                payment_hws.flush()
+                signing_args.extend(["--hw-signing-file", payment_hws.name])
 
-            if stake:
-                self.write_key_file(stake_hws, self.accounts[account]["stake_skey"])
-                signing_args.extend(["--hw-signing-file", stake_hws])
-            cli_args = [
-                "cardano-hw-cli",
-                "shelley",
-                "transaction",
-                "sign",
-                *self.magic_args,
-                "--tx-body-file",
-                tx_body,
-                "--out-file",
-                out_file,
-                *signing_args
-            ]
-            p = subprocess.run(cli_args, capture_output=True, text=True)
-            if p.returncode != 0 or not os.path.exists(out_file):
-                print(" ".join(cli_args))
-                # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
-                print(p.stdout)
-                print(p.stderr)
-                os.close(payment_hws_handle)
-                os.close(stake_hws_handle)
-                os.unlink(payment_hws)
-                os.unlink(stake_hws)
-                raise Exception(f"Unknown error signing transaction with account {account}")
-            os.close(payment_hws_handle)
-            os.close(stake_hws_handle)
-            os.unlink(payment_hws)
-            os.unlink(stake_hws)
+                if stake:
+                    stake_hws.write(self.accounts[account]["stake_skey"])
+                    stake_hws.flush()
+                    signing_args.extend(["--hw-signing-file", stake_hws.name])
+                cli_args = [
+                    "cardano-hw-cli",
+                    "shelley",
+                    "transaction",
+                    "sign",
+                    *self.magic_args,
+                    "--tx-body-file",
+                    tx_body,
+                    "--out-file",
+                    out_file,
+                    *signing_args
+                ]
+                p = subprocess.run(cli_args, capture_output=True, text=True)
+                if p.returncode != 0 or not os.path.exists(out_file):
+                    print(" ".join(cli_args))
+                    # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
+                    print(p.stdout)
+                    print(p.stderr)
+                    raise Exception(f"Unknown error signing transaction with account {account}")
             return
         elif self.accounts[account]["payment_skey"]:
-            (payment_skey_handle, payment_skey) = tempfile.mkstemp()
-            (stake_skey_handle, stake_skey) = tempfile.mkstemp()
-            signing_args = []
-            self.write_key_file(payment_skey, self.accounts[account]["payment_skey"])
-            signing_args.extend(["--signing-key-file", payment_skey])
+            with tempfile.NamedTemporaryFile("w+") as payment_skey, tempfile.NamedTemporaryFile("w+") as stake_skey:
+                signing_args = []
+                payment_skey.write(self.accounts[account]["payment_skey"])
+                payment_skey.flush()
+                signing_args.extend(["--signing-key-file", payment_skey.name])
 
-            if stake:
-                self.write_key_file(stake_hws, self.accounts[account]["stake_skey"])
-                signing_args.extend(["--signing-key-file", stake_skey])
-            cli_args = [
-                "cardano-cli",
-                "transaction",
-                "sign",
-                "--tx-body-file",
-                tx_body,
-                "--out-file",
-                out_file,
-                *signing_args
-            ]
-            p = subprocess.run(cli_args, capture_output=True, text=True)
-            if p.returncode != 0 or not os.path.exists(out_file):
-                print(" ".join(cli_args))
-                # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
-                print(p.stdout)
-                print(p.stderr)
-                os.close(payment_skey_handle)
-                os.close(stake_skey_handle)
-                os.unlink(payment_skey)
-                os.unlink(stake_skey)
-                raise Exception(f"Unknown error signing transaction with account {account}")
-            os.close(payment_skey_handle)
-            os.close(stake_skey_handle)
-            os.unlink(payment_skey)
-            os.unlink(stake_skey)
+                if stake:
+                    stake_hws.write(self.accounts[account]["stake_skey"])
+                    stake_hws.flush()
+                    signing_args.extend(["--signing-key-file", stake_skey.name])
+                cli_args = [
+                    "cardano-cli",
+                    "transaction",
+                    "sign",
+                    "--tx-body-file",
+                    tx_body,
+                    "--out-file",
+                    out_file,
+                    *signing_args
+                ]
+                p = subprocess.run(cli_args, capture_output=True, text=True)
+                if p.returncode != 0 or not os.path.exists(out_file):
+                    print(" ".join(cli_args))
+                    # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
+                    print(p.stdout)
+                    print(p.stderr)
+                    raise Exception(f"Unknown error signing transaction with account {account}")
             return
         raise Exception(f"No signing key available for account {account}")
+
+    def bulk_witness_tx(self, tx_archive, out_file, role):
+        with tarfile.open(name=out_file, mode='w:gz') as tarout, tarfile.open(name=tx_archive, mode='r:gz') as tarin:
+                for member in tarin.getmembers():
+                    with tempfile.NamedTemporaryFile("w+") as tx, tempfile.NamedTemporaryFile("w+") as witness:
+                        with open(tx, "w") as f:
+                            tarout.extractfile(f)
+                        self.witness_tx(member.name.split[0], tx.name, out_file, role)
 
     def witness_tx(self, account, tx_body, out_file, role):
         if account not in self.accounts:
             self.import_account(account)
 
         if self.hardware_wallet:
-            (hws_handle, hws) = tempfile.mkstemp()
-            signing_args = []
-            self.write_key_file(hws, self.accounts[account][f"{role}_skey"])
-            signing_args.extend(["--hw-signing-file", hws])
+            with tempfile.NamedTemporaryFile("w+") as hws:
+                signing_args = []
+                hws.write(self.accounts[account][f"{role}_skey"])
+                hws.flush()
+                signing_args.extend(["--hw-signing-file", hws.name])
 
-            cli_args = [
-                "cardano-hw-cli",
-                "shelley",
-                "transaction",
-                "witness",
-                *self.magic_args,
-                "--tx-body-file",
-                tx_body,
-                "--out-file",
-                out_file,
-                *signing_args
-            ]
-            p = subprocess.run(cli_args, capture_output=True, text=True)
-            if p.returncode != 0 or not os.path.exists(out_file):
-                print(" ".join(cli_args))
-                # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
-                print(p.stdout)
-                print(p.stderr)
-                os.close(hws_handle)
-                os.unlink(hws)
-                raise Exception(f"Unknown error witnessing transaction with account {account}")
-            os.close(hws_handle)
-            os.unlink(hws)
+                cli_args = [
+                    "cardano-hw-cli",
+                    "shelley",
+                    "transaction",
+                    "witness",
+                    *self.magic_args,
+                    "--tx-body-file",
+                    tx_body,
+                    "--out-file",
+                    out_file,
+                    *signing_args
+                ]
+                p = subprocess.run(cli_args, capture_output=True, text=True)
+                if p.returncode != 0 or not os.path.exists(out_file):
+                    print(" ".join(cli_args))
+                    # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
+                    print(p.stdout)
+                    print(p.stderr)
+                    raise Exception(f"Unknown error witnessing transaction with account {account}")
             return
         elif self.accounts[account][f"{role}_skey"]:
-            (skey_handle, skey) = tempfile.mkstemp()
-            signing_args = []
-            self.write_key_file(skey, self.accounts[account][f"{role}_skey"])
-            signing_args.extend(["--signing-key-file", skey])
+            with tempfile.NamedTemporaryFile("w+") as skey:
+                signing_args = []
+                skey.write(self.accounts[account][f"{role}_skey"])
+                skey.flush()
+                signing_args.extend(["--signing-key-file", skey.name])
 
-            cli_args = [
-                "cardano-cli",
-                "transaction",
-                "witness",
-                "--tx-body-file",
-                tx_body,
-                "--out-file",
-                out_file,
-                *signing_args
-            ]
-            p = subprocess.run(cli_args, capture_output=True, text=True)
-            if p.returncode != 0 or not os.path.exists(out_file):
-                print(" ".join(cli_args))
-                # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
-                print(p.stdout)
-                print(p.stderr)
-                os.close(skey_handle)
-                os.unlink(skey)
-                raise Exception(f"Unknown error witnessing transaction with account {account}")
-            os.close(skey_handle)
-            os.unlink(skey)
+                cli_args = [
+                    "cardano-cli",
+                    "transaction",
+                    "witness",
+                    "--tx-body-file",
+                    tx_body,
+                    "--out-file",
+                    out_file,
+                    *signing_args
+                ]
+                p = subprocess.run(cli_args, capture_output=True, text=True)
+                if p.returncode != 0 or not os.path.exists(out_file):
+                    print(" ".join(cli_args))
+                    # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
+                    print(p.stdout)
+                    print(p.stderr)
+                    raise Exception(f"Unknown error witnessing transaction with account {account}")
             return
         raise Exception(f"No signing key available for account {account} with role {role}")
 
@@ -643,35 +581,26 @@ class AdaWallet:
         return utxos
 
     def stake_registration_tx(self, account, out_file, fee, ttl=None, sign=False, deposit=2000000):
-        (cert_handle, stake_registration_certificate) = tempfile.mkstemp()
-        (vkey_handle, vkey) = tempfile.mkstemp()
-        self.write_key_file(vkey, self.accounts[account]["stake_vkey"])
-        cli_args = [
-            "cardano-cli",
-            "stake-address",
-            "registration-certificate",
-            "--stake-verification-key-file",
-            vkey,
-            "--out-file",
-            stake_registration_certificate
-        ]
-        p = subprocess.run(cli_args, capture_output=True, text=True)
-        if p.returncode != 0:
-            print(" ".join(cli_args))
-            # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
-            print(p.stdout)
-            print(p.stderr)
-            os.close(cert_handle)
-            os.unlink(stake_registration_certificate)
-            os.close(vkey_handle)
-            os.unlink(vkey)
-            raise Exception(f"Unknown error generating stake registration certificate for account {account}")
-        result = self.build_tx(account, out_file, fee, certificates=[stake_registration_certificate], ttl=ttl, sign=sign, deposit=deposit, stake=True)
-        os.close(cert_handle)
-        os.unlink(stake_registration_certificate)
-        os.close(vkey_handle)
-        os.unlink(vkey)
-        return result
+        with tempfile.NamedTemporaryFile("w+") as stake_registration_certificate, tempfile.NamedTemporaryFile("w+") as vkey:
+            vkey.write(self.accounts[account]["stake_vkey"])
+            vkey.flush()
+            cli_args = [
+                "cardano-cli",
+                "stake-address",
+                "registration-certificate",
+                "--stake-verification-key-file",
+                vkey.name,
+                "--out-file",
+                stake_registration_certificate.name
+            ]
+            p = subprocess.run(cli_args, capture_output=True, text=True)
+            if p.returncode != 0:
+                print(" ".join(cli_args))
+                # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
+                print(p.stdout)
+                print(p.stderr)
+                raise Exception(f"Unknown error generating stake registration certificate for account {account}")
+            return self.build_tx(account, out_file, fee, certificates=[stake_registration_certificate], ttl=ttl, sign=sign, deposit=deposit, stake=True)
 
     def bulk_stake_registration_tx(self, out_file, fee, ttl=None, deposit=2000000, sign=False):
         if sign:
@@ -681,13 +610,12 @@ class AdaWallet:
 
         sum_result = (0, 0, 0, 0)
 
-        with open(out_file, "wb") as f:
-            with tarfile.open(fileobj=f, mode='w:gz') as tar:
-                for account,details in self.accounts.items():
-                    (tx_handle, tx) = tempfile.mkstemp(suffix, str(account))
-                    result = self.stake_registration_tx(int(account), tx, fee, ttl, sign, deposit)
+        with tarfile.open(name=out_file, mode='w:gz') as tar:
+            for account,details in self.accounts.items():
+                with tempfile.NamedTemporaryFile("w+") as tx:
+                    result = self.stake_registration_tx(int(account), tx.name, fee, ttl, sign, deposit)
                     tar.add(tx, f"{account}.{suffix}")
-                    sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
+                sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
 
     def bulk_delegate_pool_tx(self, delegations_file, out_file, fee, ttl=None, sign=False):
@@ -703,44 +631,36 @@ class AdaWallet:
         with open(out_file, "wb") as f2:
             with tarfile.open(fileobj=f2, mode='w:gz') as tar:
                 for account,pool_id in delegations.items():
-                    (tx_handle, tx) = tempfile.mkstemp(suffix, str(account))
-                    result = self.delegate_pool_tx(int(account), pool_id, tx, fee, ttl, sign)
-                    tar.add(tx, f"{account}.{suffix}")
+                    with tempfile.NamedTemporaryFile("w+") as tx:
+                        result = self.delegate_pool_tx(int(account), pool_id, tx.name, fee, ttl, sign)
+                        tar.add(tx, f"{account}.{suffix}")
                     sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
 
 
     def delegate_pool_tx(self, account, pool_id, out_file, fee, ttl=None, sign=False):
-        (cert_handle, delegation_certificate) = tempfile.mkstemp()
-        (vkey_handle, vkey) = tempfile.mkstemp()
-        self.write_key_file(vkey, self.accounts[account]["stake_vkey"])
-        cli_args = [
-            "cardano-cli",
-            "stake-address",
-            "delegation-certificate",
-            "--stake-verification-key-file",
-            vkey,
-            "--stake-pool-id",
-            pool_id,
-            "--out-file",
-            delegation_certificate
-        ]
-        p = subprocess.run(cli_args, capture_output=True, text=True)
-        if p.returncode != 0:
-            print(" ".join(cli_args))
-            # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
-            print(p.stdout)
-            print(p.stderr)
-            os.close(cert_handle)
-            os.unlink(delegation_certificate)
-            os.close(vkey_handle)
-            os.unlink(vkey)
-            raise Exception(f"Unknown error generating stake delegation certificate for account {account}")
-        result = self.build_tx(account, out_file, fee, certificates=[delegation_certificate], ttl=ttl, sign=sign, stake=True)
-        os.close(cert_handle)
-        os.unlink(delegation_certificate)
-        os.close(vkey_handle)
-        os.unlink(vkey)
+        with tempfile.NamedTemporaryFile("w+") as delegation_certificate, tempfile.NamedTemporaryFile("w+") as vkey:
+            vkey.write(self.accounts[account]["stake_vkey"])
+            vkey.flush()
+            cli_args = [
+                "cardano-cli",
+                "stake-address",
+                "delegation-certificate",
+                "--stake-verification-key-file",
+                vkey.name,
+                "--stake-pool-id",
+                pool_id,
+                "--out-file",
+                delegation_certificate.name
+            ]
+            p = subprocess.run(cli_args, capture_output=True, text=True)
+            if p.returncode != 0:
+                print(" ".join(cli_args))
+                # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
+                print(p.stdout)
+                print(p.stderr)
+                raise Exception(f"Unknown error generating stake delegation certificate for account {account}")
+            result = self.build_tx(account, out_file, fee, certificates=[delegation_certificate], ttl=ttl, sign=sign, stake=True)
         return result
 
     def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False):
@@ -776,9 +696,11 @@ class AdaWallet:
             cli_args.extend(["--certificate", certificate])
 
         change = in_total - out_total - fee - deposit
-        if change > 1000000:
+        if change >= 1000000:
             cli_args.extend(["--tx-out", f"{account_address}+{change}"])
-        elif change >= 1000000:
+        elif change == 0:
+            pass
+        elif change < 1000000 and change > 0:
             fee = change + fee
         elif change < 0:
             raise Exception("Error generating transaction, not enough funds")
