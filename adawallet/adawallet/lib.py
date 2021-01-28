@@ -408,8 +408,8 @@ class AdaWallet:
                 signing_args.extend(["--signing-key-file", payment_skey.name])
 
                 if stake:
-                    stake_hws.write(self.accounts[account]["stake_skey"])
-                    stake_hws.flush()
+                    stake_skey.write(self.accounts[account]["stake_skey"])
+                    stake_skey.flush()
                     signing_args.extend(["--signing-key-file", stake_skey.name])
                 cli_args = [
                     "cardano-cli",
@@ -434,10 +434,28 @@ class AdaWallet:
     def bulk_witness_tx(self, tx_archive, out_file, role):
         with tarfile.open(name=out_file, mode='w:gz') as tarout, tarfile.open(name=tx_archive, mode='r:gz') as tarin:
                 for member in tarin.getmembers():
-                    with tempfile.NamedTemporaryFile("w+") as tx, tempfile.NamedTemporaryFile("w+") as witness:
-                        with open(tx, "w") as f:
-                            tarout.extractfile(f)
-                        self.witness_tx(member.name.split[0], tx.name, out_file, role)
+                    with tempfile.NamedTemporaryFile("wb+") as tx, tempfile.NamedTemporaryFile("w+") as witness:
+                        tx_buf = tarin.extractfile(member)
+                        tx_contents = tx_buf.read()
+                        tx.write(tx_contents)
+                        tx.flush()
+                        account = int(member.name.split(".")[0])
+                        txwitness_name = f"{account}.txwitness-{role}"
+                        self.witness_tx(account, tx.name, witness.name, role)
+                        tarout.add(witness.name, txwitness_name)
+
+    def bulk_sign_tx(self, tx_archive, out_file, stake=False):
+        with tarfile.open(name=out_file, mode='w:gz') as tarout, tarfile.open(name=tx_archive, mode='r:gz') as tarin:
+                for member in tarin.getmembers():
+                    with tempfile.NamedTemporaryFile("wb+") as tx, tempfile.NamedTemporaryFile("w+") as sign:
+                        tx_buf = tarin.extractfile(member)
+                        tx_contents = tx_buf.read()
+                        tx.write(tx_contents)
+                        tx.flush()
+                        account = int(member.name.split(".")[0])
+                        txsigned_name = f"{account}.txsigned"
+                        self.sign_tx(account, tx.name, sign.name, stake=stake)
+                        tarout.add(sign.name, txsigned_name)
 
     def witness_tx(self, account, tx_body, out_file, role):
         if account not in self.accounts:
