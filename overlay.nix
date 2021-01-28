@@ -5,14 +5,6 @@ let
 
 in self: super: {
   cardano-hw-cli = self.callPackage ./cardano-hw-cli {};
-  cardano-rosetta-python = self.python3Packages.buildPythonPackage {
-    pname = "cardano-rosetta-python";
-    version = "0.0.0";
-    src = ./cardano-rosetta-python;
-    doCheck = false;
-    propagatedBuildInputs = with self.python3Packages; [ six dateutil urllib3 ];
-  };
-
   cardano-completions = self.runCommand "cardano-completions" {} ''
     BASH_COMPLETIONS=$out/share/bash-completion/completions
     mkdir -p $BASH_COMPLETIONS
@@ -27,20 +19,23 @@ in self: super: {
   inherit (walletPkgs) cardano-address bech32;
   # cardano-wallet attribute includes cardano-node which causes a collision
   inherit (walletPkgs.haskellPackages.cardano-wallet.components.exes) cardano-wallet;
-  trezor = self.python3Packages.trezor.overrideAttrs (oldAttrs: {
-    src = self.python3Packages.fetchPypi {
-      pname = "trezor";
-      version = "0.12.1";
-      sha256 = "sha256-KTz8PF0T+mKkLSP4XaoMmOPrLjxEqwylTrMUzWmqKfA=";
-    };
-  });
+
   adawallet = self.python3Packages.buildPythonApplication {
     pname = "adawallet";
-    version = "0.0.0";
+    version = "1.0.0";
     src = ./adawallet;
-    propagatedBuildInputs = [ self.cardano-rosetta-py self.python3Packages.docopt ];
+    propagatedBuildInputs = with self; [
+      cardano-rosetta-py
+      python3Packages.docopt
+      python3Packages.apsw
+      cardano-cli
+      cardano-hw-cli
+      cardano-address
+      srm
+    ];
     doCheck = false;
   };
+
   cardano-rosetta-py = let
     src = self.runCommand "cardano-rosetta-py-src" { buildInputs = [ self.openapi-generator-cli ]; } ''
       mkdir $out
