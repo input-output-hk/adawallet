@@ -2,62 +2,66 @@
 """Ada Wallet
 
 Usage:
-    adawallet init-create [--testnet] [--rosetta-url=URL]
-    adawallet init-restore [--testnet] [--rosetta-url=URL]
-    adawallet init-hardware [--testnet] [--rosetta-url=URL]
-    adawallet init-read-only [--testnet] [--rosetta-url=URL]
-    adawallet import-accounts -s 0 -e 7 [--accounts-file=FILE]
-    adawallet load-utxo --snapshot=FILE
+    adawallet init-create [--testnet] [--rosetta-url URL]
+    adawallet init-restore [--testnet] [--rosetta-url URL]
+    adawallet init-hardware [--testnet] [--rosetta-url URL]
+    adawallet init-read-only [--testnet] [--rosetta-url URL]
+    adawallet import-accounts -s 0 -e 7 [--accounts-file FILE]
+    adawallet load-utxo --snapshot FILE
     adawallet fetch-utxos
-    adawallet get-ttl [--seconds=INT]
-    adawallet import-utxos --utxo-file=FILE
-    adawallet export-utxos --utxo-file=FILE
-    adawallet export-accounts --accounts-file=FILE
-    adawallet import-accounts --accounts-file=FILE
-    adawallet bulk-witness-tx --transactions-file=FILE --out-file=FILE [--payment | --stake]
-    adawallet bulk-sign-tx --transactions-file=FILE --out-file=FILE [--stake]
+    adawallet get-ttl [--seconds INT]
+    adawallet import-utxos --utxo-file FILE
+    adawallet export-utxos --utxo-file FILE
+    adawallet export-accounts --accounts-file FILE
+    adawallet import-accounts --accounts-file FILE
+    adawallet bulk-witness-tx --transactions-file FILE --out-file FILE [--payment | --stake]
+    adawallet bulk-sign-tx --transactions-file FILE --out-file FILE [--stake]
     adawallet stake-registration-tx --account 0 --fee 210000 --out-file FILE [--ttl 5000000] [--sign] [--deposit 2000000]
     adawallet bulk-stake-registration-tx --fee 210000 --out-file FILE [--ttl 5000000] [--sign] [--deposit 2000000]
     adawallet delegate-pool-tx --account 0 --pool-id pool1y25deq9kldy9y9gfvrpw8zt05zsrfx84zjhugaxrx9ftvwdpua2 --fee 210000 --out-file FILE [--ttl 5000000] [--sign]
-    adawallet bulk-delegate-pool-tx --delegations=FILE --fee 210000 --out-file FILE [--ttl 5000000] [--sign]
+    adawallet bulk-delegate-pool-tx --delegations FILE --fee 210000 --out-file FILE [--ttl 5000000] [--sign]
     adawallet send-tx --account 0 --address addr1q8ugkffj2mvs9stmcjxcsm3tfxpsn9dzt5whyq9u4vjq4cgzft2upy983gut8q23q3c92h60r9nvxs267acrma9z9pmst5p439 --amount 5000000 --fee 200000 --out-file FILE [--ttl 5000000] [--sign]
     adawallet sign-tx --account 0 --tx-body-file FILE --out-file FILE [--stake]
     adawallet witness-tx --account 0 --tx-body-file FILE --out-file FILE [--payment | --stake]
     adawallet bulk-tx --recipients FILE --account 0 --fee 170000 --out-file FILE [--ttl 5000000] [--sign]
-    adawallet migrate-wallet --accounts-file=FILE --fee 170000 --out-file FILE [--ttl 5000000] [--sign]
+    adawallet migrate-wallet --accounts-file FILE --fee 170000 --out-file FILE [--ttl 5000000] [--sign]
     adawallet wipe
 
 Options:
     -h --help                   Show this screen
     --version                   Show version
-    -s --start=<INT>            Starting account
-    -e --end=<INT>              Ending account
+    -s --start <INT>            Starting account
+    -e --end <INT>              Ending account
     -t --testnet                Use testnet addresses
-    --snapshot=<FILE>           UTXO snapshot to load into database
-    --pool-transactions=<FILE>  Tarball containing transactions with pool registration certificates
-    --delegation=<FILE>         JSON file containing map of accounts to pool ids
-    --rosetta-url=<URL>         Rosetta URL [default: https://explorer.cardano.org/rosetta]
-    --account=<INT>             Account of wallet to use
-    --fee=<INT>                 Fee to use for transaction
-    --deposit=<INT>             Total deposits in transaction [default: 2000000]
-    --amount=<INT>              Amount to send
-    --address=<STRING>          Receiving address
-    --pool-id=<STRING>          pool id hash
-    --ttl=<INT>                 Time to live for transaction
-    --out-file=<FILE>           Output file
-    --tx-body-file=<FILE>       Body of TX
+    --snapshot <FILE>           UTXO snapshot to load into database
+    --pool-transactions <FILE>  Tarball containing transactions with pool registration certificates
+    --delegation <FILE>         JSON file containing map of accounts to pool ids
+    --rosetta-url <URL>         Rosetta URL [default: https://explorer.cardano.org/rosetta]
+    --account <INT>             Account of wallet to use
+    --fee <INT>                 Fee to use for transaction
+    --deposit <INT>             Total deposits in transaction [default: 2000000]
+    --amount <INT>              Amount to send
+    --address <STRING>          Receiving address
+    --pool-id <STRING>          pool id hash
+    --ttl <INT>                 Time to live for transaction
+    --out-file <FILE>           Output file
+    --tx-body-file <FILE>       Body of TX
     --payment                   Witness with payment key
     --stake                     Sign/Witness with stake key
     --sign                      Sign Transaction
-    --utxo-file=<FILE>          JSON file containing utxos
-    --seconds=<INT>             Seconds from now for tx to live
-    --recipients=<FILE>         JSON list of funds to send
+    --utxo-file <FILE>          JSON file containing utxos
+    --seconds <INT>             Seconds from now for tx to live
+    --recipients <FILE>         JSON list of funds to send
 """
 
+import sys
 import os
 import json
 from docopt import docopt
 from adawallet.lib import AdaWallet, input_mnemonic
+
+if len(sys.argv) == 1:
+    sys.argv.append('-h')
 
 arguments = docopt(__doc__, version='Ada Wallet 1.0')
 state_dir = os.getenv('ADAWALLET_STATE', './state-adawallet')
@@ -288,7 +292,7 @@ elif arguments['send-tx']:
             exit(1)
         address = arguments["--address"]
         amount = arguments["--amount"]
-        recipients = { f"{address}": int(amount) }
+        recipients = {f"{address}": int(amount)}
         in_total, out_total, fee, change = adawallet.build_tx(int(arguments["--account"]), arguments["--out-file"], int(arguments["--fee"]), txouts=recipients, ttl=arguments["--ttl"], sign=arguments["--sign"])
         print(f"Transaction created sending {out_total} with change remaining of {change} at a fee of {fee}")
     else:
