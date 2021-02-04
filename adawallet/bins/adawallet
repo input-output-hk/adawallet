@@ -33,9 +33,10 @@ Options:
     -s --start <INT>            Starting account
     -e --end <INT>              Ending account
     -t --testnet                Use testnet addresses
+    --accounts-file <FILE>      Specify an accounts file to perform operations on
     --snapshot <FILE>           UTXO snapshot to load into database
     --pool-transactions <FILE>  Tarball containing transactions with pool registration certificates
-    --delegation <FILE>         JSON file containing map of accounts to pool ids
+    --delegations <FILE>        JSON file containing map of accounts to pool ids
     --rosetta-url <URL>         Rosetta URL [default: https://explorer.cardano.org/rosetta]
     --account <INT>             Account of wallet to use
     --fee <INT>                 Fee to use for transaction
@@ -50,6 +51,7 @@ Options:
     --stake                     Sign/Witness with stake key
     --sign                      Sign Transaction
     --utxo-file <FILE>          JSON file containing utxos
+    --transactions-file <FILE>  Specify a transactions file to perform operations on
     --seconds <INT>             Seconds from now for tx to live
     --recipients <FILE>         JSON list of funds to send
 """
