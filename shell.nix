@@ -1,7 +1,7 @@
 let
   sources = import ./nix/sources.nix {};
   pkgs = import sources.nixpkgs { overlays = [ (import ./overlay.nix) ]; };
-  buildInputs = with pkgs; [
+  nativeBuildInputs = with pkgs; [
     cardano-cli
     cardano-hw-cli
     cardano-address
@@ -12,14 +12,13 @@ let
     adawallet
     srm
   ];
-in pkgs.stdenv.mkDerivation {
-  name = "adawallet-shell";
-  inherit buildInputs;
+in pkgs.mkShell {
+  inherit nativeBuildInputs;
   XDG_DATA_DIRS = with pkgs.lib; concatStringsSep ":" (
     [(builtins.getEnv "XDG_DATA_DIRS")] ++
     (filter
       (share: builtins.pathExists (share + "/bash-completion"))
-      (map (p: p + "/share") buildInputs))
+      (map (p: p + "/share") nativeBuildInputs))
   );
   shellHook = ''
     echo "Ada Wallet Shell Tools" \

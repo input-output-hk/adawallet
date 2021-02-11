@@ -28,10 +28,6 @@ in self: super: {
       cardano-rosetta-py
       python3Packages.docopt
       python3Packages.apsw
-      cardano-cli
-      cardano-hw-cli
-      cardano-address
-      srm
     ];
     doCheck = false;
   };
