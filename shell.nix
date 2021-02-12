@@ -25,4 +25,4 @@ in pkgs.mkShell {
     | ${pkgs.figlet}/bin/figlet -f banner -c \
     | ${pkgs.lolcat}/bin/lolcat
   '';
-}
+} // { inherit nativeBuildInputs pkgs; }

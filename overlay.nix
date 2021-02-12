@@ -30,6 +30,38 @@ in self: super: {
       python3Packages.apsw
     ];
     doCheck = false;
+    postInstall = ''
+      mkdir -p $out/share/bash-completion/completions
+      ${self.docopt_completion}/bin/docopt-completion $out/bin/adawallet --manual-bash
+      # docopt-completion generates trailing = which breaks completion
+      cat adawallet.sh|${self.gnused}/bin/sed 's/= / /g' > $out/share/bash-completion/completions/adawallet
+      mkdir -p $out/share/zsh/site-functions
+      ${self.docopt_completion}/bin/docopt-completion $out/bin/adawallet --manual-zsh
+      cp _adawallet $out/share/zsh/site-functions/_adawallet
+    '';
+  };
+
+  docopt_completion = self.python3Packages.buildPythonApplication rec {
+    pname = "infi.docopt_completion";
+    version = "0.2.9";
+    propagatedBuildInputs = [
+      self.python3Packages.docopt
+    ];
+    src = self.python3Packages.fetchPypi {
+      inherit pname version;
+      sha256 = "sha256-x+ZXVNQ9NrIM1jZGDDx3ZgeOUv7NqqZLoZmiaB5KbOI=";
+    };
+    doCheck = false;
+  };
+
+  nulltype = self.python3Packages.buildPythonApplication rec {
+    pname = "nulltype";
+    version = "2.3.1";
+    src = self.fetchurl {
+      url = "https://files.pythonhosted.org/packages/2f/ce/92289851364b7f816a839c8064aac06c01f3a3ecf33ab04adf9d0a0ab66a/nulltype-2.3.1.zip";
+      sha256 = "sha256-ZKo8sqtekE0bNxdbm5Ir6iaME/nOMuPTczExUKte8nI=";
+    };
+    doCheck = false;
   };
 
   cardano-rosetta-py = let
@@ -41,8 +73,7 @@ in self: super: {
   in self.python3Packages.buildPythonPackage {
     inherit src;
     version = "0.0.0";
-    #nativeBuildInputs = with self.python3Packages; [ six ];
-    propagatedBuildInputs = with self.python3Packages; [ certifi urllib3 dateutil ];
+    propagatedBuildInputs = with self.python3Packages; [ certifi urllib3 dateutil self.nulltype ];
     pname = "cardano-rosetta-py";
     doCheck = false;
   };
