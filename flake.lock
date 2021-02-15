@@ -42,6 +42,23 @@
         "type": "github"
       }
     },
+    "cardano-rosetta": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1612206509,
+        "narHash": "sha256-LkUV4HB04sqNmhCv/vwVheQzCYmmukC0iT9Y1sXqPTk=",
+        "owner": "input-output-hk",
+        "repo": "cardano-rosetta",
+        "rev": "46f814f78884377010b46e6e307746ebea02ffce",
+        "type": "github"
+      },
+      "original": {
+        "owner": "input-output-hk",
+        "ref": "1.1.0",
+        "repo": "cardano-rosetta",
+        "type": "github"
+      }
+    },
     "haskell-nix": {
       "locked": {
         "lastModified": 1611120169,
@@ -124,6 +141,7 @@
       "inputs": {
         "cardano-addresses": "cardano-addresses",
         "cardano-node": "cardano-node",
+        "cardano-rosetta": "cardano-rosetta",
         "nixpkgs": "nixpkgs_3"
       }
     },

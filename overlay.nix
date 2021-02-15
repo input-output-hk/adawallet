@@ -66,7 +66,7 @@ in {
     src = final.runCommand "cardano-rosetta-py-src" { buildInputs = [ final.openapi-generator-cli ]; } ''
       mkdir $out
       cd $out
-      openapi-generator-cli generate -i ${sources.cardano-rosetta}/cardano-rosetta-server/src/server/openApi.json -g python --additional-properties=packageName=cardano_rosetta
+      openapi-generator-cli generate -i ${inputs.cardano-rosetta}/cardano-rosetta-server/src/server/openApi.json -g python-legacy --additional-properties=packageName=cardano_rosetta
     '';
   in final.python3Packages.buildPythonPackage {
     inherit src;
@@ -75,4 +75,28 @@ in {
     pname = "cardano-rosetta-py";
     doCheck = false;
   };
+  devShell = prev.mkShell rec {
+    nativeBuildInputs = with final; [
+      cardano-cli
+      cardano-hw-cli
+      cardano-address
+      cardano-completions
+      python3Packages.ipython
+      python3Packages.apsw
+      cardano-rosetta-py
+      adawallet
+      srm
+    ];
+    XDG_DATA_DIRS = with final.lib; concatStringsSep ":" (
+      [(builtins.getEnv "XDG_DATA_DIRS")] ++
+      (filter
+        (share: builtins.pathExists (share + "/bash-completion"))
+        (map (p: p + "/share") nativeBuildInputs))
+    );
+    shellHook = ''
+      echo "Ada Wallet Shell Tools" \
+      | ${final.figlet}/bin/figlet -f banner -c \
+      | ${final.lolcat}/bin/lolcat
+    '';
+    };
 }
