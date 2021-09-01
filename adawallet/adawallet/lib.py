@@ -11,7 +11,22 @@ from pathlib import Path
 
 # openapi client for rosetta
 import cardano_rosetta
-from cardano_rosetta.rest import ApiException
+from cardano_rosetta.api.account_api import AccountApi
+from cardano_rosetta.api.network_api import NetworkApi
+from cardano_rosetta.api.block_api import BlockApi
+from cardano_rosetta.model.account_identifier import AccountIdentifier
+from cardano_rosetta.model.block_identifier import BlockIdentifier
+from cardano_rosetta.model.partial_block_identifier import PartialBlockIdentifier
+from cardano_rosetta.model.currency import Currency
+from cardano_rosetta.model.metadata_request import MetadataRequest
+from cardano_rosetta.model.block_request import BlockRequest
+from cardano_rosetta.model.network_request import NetworkRequest
+from cardano_rosetta.model.account_coins_request import AccountCoinsRequest
+from cardano_rosetta.model.account_coins_response import AccountCoinsResponse
+from cardano_rosetta.model.account_balance_request import AccountBalanceRequest
+from cardano_rosetta.model.account_balance_response import AccountBalanceResponse
+from cardano_rosetta.model.error import Error
+from cardano_rosetta import ApiException
 
 def input_mnemonic():
     data = input('Input 1st word or entire mnemonic: ')
@@ -559,31 +574,35 @@ class AdaWallet:
         return 0
 
     def get_network_list(self):
-        network_api_instance = cardano_rosetta.NetworkApi(self.rosetta_client)
-        metadata_request = cardano_rosetta.MetadataRequest() # MetadataRequest |
+        metadata_request = MetadataRequest() # MetadataRequest |
         try:
             # Get List of Available Networks
+            network_api_instance = NetworkApi(self.rosetta_client)
             return network_api_instance.network_list(metadata_request).network_identifiers[0]
         except ApiException as e:
             print("Exception when calling NetworkApi->network_list: %s\n" % e)
 
     def get_network_status(self, network_identifier):
-        network_api_instance = cardano_rosetta.NetworkApi(self.rosetta_client)
-        network_request = cardano_rosetta.NetworkRequest(network_identifier)
+        network_request = NetworkRequest(network_identifier)
         try:
+            network_api_instance = NetworkApi(self.rosetta_client)
             return network_api_instance.network_status(network_request)
         except ApiException as e:
             print("Exception when calling NetworkApi->network_status: %s\n" % e)
 
     def get_block(self, block_identifier=None):
         network_identifier = self.get_network_list()
+        if type(block_identifier) is cardano_rosetta.model.block_identifier.BlockIdentifier:
+            block_identifier = PartialBlockIdentifier(index=block_identifier.index, hash=block_identifier.hash)
+
         if not block_identifier:
             network_status = self.get_network_status(network_identifier)
-            block_identifier = network_status.current_block_identifier
+            full_block = network_status.current_block_identifier
+            block_identifier = PartialBlockIdentifier(index=full_block.index, hash=full_block.hash)
 
-        block_request = cardano_rosetta.BlockRequest(network_identifier, block_identifier)
-        block_api_instance = cardano_rosetta.BlockApi(self.rosetta_client)
+        block_request = BlockRequest(network_identifier, block_identifier)
         try:
+            block_api_instance = BlockApi(self.rosetta_client)
             return block_api_instance.block(block_request)
         except ApiException as e:
             print("Exception when calling BlockApi->block: %s\n" % e)
@@ -768,22 +787,21 @@ class AdaWallet:
         network_identifier = self.get_network_list()
         network_status = self.get_network_status(network_identifier)
 
-        account_api_instance = cardano_rosetta.AccountApi(self.rosetta_client)
-        account_identifier = cardano_rosetta.AccountIdentifier(address)
-        block_identifier = network_status.current_block_identifier
+        account_api_instance = AccountApi(self.rosetta_client)
+        account_identifier = AccountIdentifier(address)
+        ada = Currency(symbol='ADA', decimals=6)
+        utxo_request = AccountCoinsRequest(network_identifier=network_identifier, account_identifier=account_identifier, include_mempool=False, currencies=[ada])
         try:
-            block = self.get_block(block_identifier)
-        except ApiException as e:
-            print("Exception when calling BlockApi->block: %s\n" % e)
-
-        utxo_request = cardano_rosetta.AccountBalanceRequest(network_identifier, account_identifier, block) # BlockRequest |
-        try:
-            # Get a Block
-            balance_request = account_api_instance.account_balance(utxo_request)
-            coins = balance_request.coins
+            coins = account_api_instance.account_coins(utxo_request).coins
             utxos = []
             for coin in coins:
-                if coin.amount.currency.symbol == 'ADA':
+                has_tokens = False
+                if hasattr(coin, 'metadata'):
+                    for k,meta in coin.metadata.items():
+                        for entry in meta:
+                            if 'tokens' in entry:
+                                has_tokens=True
+                if not has_tokens:
                     (txid, index) = coin.coin_identifier.identifier.split(":")
                     amount = coin.amount.value
                     utxos.append((txid, index, address, coin.amount.value))
