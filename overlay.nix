@@ -24,6 +24,9 @@ in {
       cardano-rosetta-py
       python3Packages.docopt
       python3Packages.apsw
+      srm
+      cardano-cli
+      cardano-address
     ];
     doCheck = false;
     postInstall = ''
@@ -75,15 +78,7 @@ in {
   };
   devShell = prev.mkShell rec {
     nativeBuildInputs = with final; [
-      cardano-cli
-      cardano-hw-cli
-      cardano-address
-      cardano-completions
-      python3Packages.ipython
-      python3Packages.apsw
-      cardano-rosetta-py
       adawallet
-      srm
     ];
     XDG_DATA_DIRS = with final.lib; concatStringsSep ":" (
       [(builtins.getEnv "XDG_DATA_DIRS")] ++
