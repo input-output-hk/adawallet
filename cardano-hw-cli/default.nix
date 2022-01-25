@@ -1,14 +1,14 @@
 { stdenv, lib, fetchurl, patchelf, libusb, libudev }:
 
 let
-  version = "1.6.2";
+  version = "1.9.1";
 in stdenv.mkDerivation {
   pname = "cardano-hw-cli";
   version = "v${version}";
   src = fetchurl {
     url = "https://github.com/vacuumlabs/cardano-hw-cli/releases/download/v${version}/cardano-hw-cli-${version}_linux-x64.tar.gz";
 
-    sha256 = "sha256-eFzydYUarQ1BEM1CQjxZpwEC0bIZWagOvPgH2hhQ8P0=";
+    sha256 = "sha256-e08CKVdvMWdmM/qhtH9xRusWfkxp52B2fYt30+Su9G0=";
   };
   phases = [ "unpackPhase" "installPhase" ];
   #sourceRoot = ".";

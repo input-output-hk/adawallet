@@ -137,3 +137,5 @@ result*
 *.json
 *.tar.gz
 wallets
+database.sqlite3
+.direnv

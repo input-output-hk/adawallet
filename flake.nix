@@ -2,14 +2,15 @@
   description = "adawallet";
   inputs = {
     nixpkgs.follows = "cardano-node/nixpkgs";
-    cardano-node.url = "github:input-output-hk/cardano-node/1.29.0";
-    cardano-addresses.url = "github:input-output-hk/cardano-addresses/nix-flake";
+    cardano-node.url = "github:input-output-hk/cardano-node/1.33.0";
+    haskellNix.url = "github:input-output-hk/haskell.nix";
+    cardano-addresses.url = "github:input-output-hk/cardano-addresses";
     cardano-rosetta = {
-      url = "github:input-output-hk/cardano-rosetta/1.4.0";
+      url = "github:input-output-hk/cardano-rosetta/1.6.1";
       flake = false;
     };
   };
-  outputs = { self, nixpkgs, cardano-node, cardano-addresses, cardano-rosetta }@inputs: let
+  outputs = { self, nixpkgs, cardano-node, cardano-addresses, cardano-rosetta, ... }@inputs: let
     overlay = import ./overlay.nix { inherit inputs self; };
     pkgs = import nixpkgs {
       system = "x86_64-linux";

@@ -385,12 +385,28 @@ class AdaWallet:
             self.import_account(account)
 
         if self.hardware_wallet:
-            with tempfile.NamedTemporaryFile("w+") as payment_hws, tempfile.NamedTemporaryFile("w+") as stake_hws:
+            with tempfile.NamedTemporaryFile("w+") as payment_hws, tempfile.NamedTemporaryFile("w+") as stake_hws, tempfile.NamedTemporaryFile("w+") as tx_body_formatted:
                 signing_args = []
                 payment_hws.write(self.accounts[account]["payment_skey"])
                 payment_hws.flush()
                 signing_args.extend(["--hw-signing-file", payment_hws.name])
 
+                cli_args = [
+                    "cardano-hw-cli",
+                    "transaction",
+                    "transform-raw",
+                    "--tx-body-file",
+                    tx_body,
+                    "--out-file",
+                    tx_body_formatted.name
+                ]
+                p = subprocess.run(cli_args, capture_output=True, text=True)
+                if p.returncode != 0 or not os.path.exists(tx_body_formatted.name):
+                    print(" ".join(cli_args))
+                    # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
+                    print(p.stdout)
+                    print(p.stderr)
+                    raise Exception(f"Unknown error signing transaction with account {account}")
                 if stake:
                     stake_hws.write(self.accounts[account]["stake_skey"])
                     stake_hws.flush()
@@ -402,7 +418,7 @@ class AdaWallet:
                     "sign",
                     *self.magic_args,
                     "--tx-body-file",
-                    tx_body,
+                    tx_body_formatted.name,
                     "--out-file",
                     out_file,
                     *signing_args
@@ -740,6 +756,7 @@ class AdaWallet:
           "cardano-cli",
           "transaction",
           "build-raw",
+          "--mary-era",
           "--ttl",
           str(ttl),
           "--out-file",
