@@ -84,7 +84,6 @@ in {
       python3Packages.apsw
       cardano-rosetta-py
       adawallet
-      srm
     ];
     XDG_DATA_DIRS = with final.lib; concatStringsSep ":" (
       [(builtins.getEnv "XDG_DATA_DIRS")] ++

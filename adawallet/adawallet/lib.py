@@ -111,7 +111,7 @@ class AdaWallet:
                 exit(1)
 
         cli_args = [
-            'srm',
+            'rm',
             '-rf',
             self.state_dir,
         ]
