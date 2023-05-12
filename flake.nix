@@ -1,12 +1,12 @@
 {
   description = "adawallet";
   inputs = {
-    nixpkgs.follows = "cardano-node/nixpkgs";
-    cardano-node.url = "github:input-output-hk/cardano-node/1.33.0";
-    haskellNix.url = "github:input-output-hk/haskell.nix";
+    #nixpkgs.follows = "cardano-node/nixpkgs";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-21.05";
+    cardano-node.url = "github:input-output-hk/cardano-node/8.0.0";
     cardano-addresses.url = "github:input-output-hk/cardano-addresses";
     cardano-rosetta = {
-      url = "github:input-output-hk/cardano-rosetta/1.6.1";
+      url = "github:input-output-hk/cardano-rosetta/2.1.0";
       flake = false;
     };
   };
