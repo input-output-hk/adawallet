@@ -9,24 +9,7 @@ import apsw
 import tarfile
 from pathlib import Path
 
-# openapi client for rosetta
-import cardano_rosetta
-from cardano_rosetta.api.account_api import AccountApi
-from cardano_rosetta.api.network_api import NetworkApi
-from cardano_rosetta.api.block_api import BlockApi
-from cardano_rosetta.model.account_identifier import AccountIdentifier
-from cardano_rosetta.model.block_identifier import BlockIdentifier
-from cardano_rosetta.model.partial_block_identifier import PartialBlockIdentifier
-from cardano_rosetta.model.currency import Currency
-from cardano_rosetta.model.metadata_request import MetadataRequest
-from cardano_rosetta.model.block_request import BlockRequest
-from cardano_rosetta.model.network_request import NetworkRequest
-from cardano_rosetta.model.account_coins_request import AccountCoinsRequest
-from cardano_rosetta.model.account_coins_response import AccountCoinsResponse
-from cardano_rosetta.model.account_balance_request import AccountBalanceRequest
-from cardano_rosetta.model.account_balance_response import AccountBalanceResponse
-from cardano_rosetta.model.error import Error
-from cardano_rosetta import ApiException
+from blockfrost import BlockFrostApi, ApiError, ApiUrls
 
 def input_mnemonic():
     data = input('Input 1st word or entire mnemonic: ')
@@ -52,7 +35,7 @@ class AdaWallet:
         self.wallet_initialized = False
         self.load_state()
 
-    def initialize(self, testnet, rosetta_url="https://explorer.cardano.org/rosetta"):
+    def initialize(self, testnet, rosetta_url=""):
         self.testnet = testnet
         self.rosetta_url = rosetta_url
         self.state_dir.mkdir(parents=True, exist_ok=True)
@@ -80,16 +63,12 @@ class AdaWallet:
             self.hardware_wallet = row[0]
             self.root_key = row[1]
             self.testnet = row[2]
+            self.blockfrost = BlockFrostApi()
             if row[3]:
-                self.rosetta_url = row[3]
-                configuration = cardano_rosetta.Configuration(
-                    host = self.rosetta_url,
-                )
-                # uncomment to debug rosetta
-                # configuration.debug = True
-                self.rosetta_client = cardano_rosetta.ApiClient(configuration)
+                # TODO: blockfrost URL stuff???
+                pass
             if self.testnet:
-                self.magic_args = ["--testnet-magic", "0"]
+                self.magic_args = ["--testnet-magic", "2"]
             else:
                 self.magic_args = ["--mainnet"]
             rows = cursor.execute("select * from accounts")
@@ -126,12 +105,12 @@ class AdaWallet:
 
     def initialize_hardware_wallet(self):
         cursor = self.db.cursor()
-        cursor.execute("insert into status values(?,?,?,?)", (True, None, self.testnet, self.rosetta_url))
+        cursor.execute("insert into status values(?,?,?,?)", (True, None, self.testnet, ""))
         self.hardware_wallet = True
 
     def initialize_read_only(self):
         cursor = self.db.cursor()
-        cursor.execute("insert into status values(?,?,?,?)", (False, None, self.testnet, self.rosetta_url))
+        cursor.execute("insert into status values(?,?,?,?)", (False, None, self.testnet, ""))
 
 
     def create_wallet_mnemonic(self):
@@ -161,7 +140,7 @@ class AdaWallet:
             raise Exception("Unknown error converting mnemonic to root key")
         root_key = p.stdout.rstrip()
         cursor = self.db.cursor()
-        cursor.execute("insert into status values(?,?,?,?)", (False, root_key, self.testnet, self.rosetta_url))
+        cursor.execute("insert into status values(?,?,?,?)", (False, root_key, self.testnet, ""))
 
     def import_accounts(self, start=None, end=None, accounts_file=None):
         if self.hardware_wallet:
@@ -586,46 +565,27 @@ class AdaWallet:
             f.write(json.dumps(utxo_entries))
 
     def get_rewards_for_stake_address(self, stake_address):
-        # TODO: query for rewards when rosetta supports it
-        return 0
-
-    def get_network_list(self):
-        metadata_request = MetadataRequest() # MetadataRequest |
         try:
-            # Get List of Available Networks
-            network_api_instance = NetworkApi(self.rosetta_client)
-            return network_api_instance.network_list(metadata_request).network_identifiers[0]
-        except ApiException as e:
-            print("Exception when calling NetworkApi->network_list: %s\n" % e)
+            account_details = self.blockfrost.accounts(
+                stake_address=stake_address,
+            )
+            return { stake_address: int(account_details.withdrawable_amount) }
+        except ApiError as e:
+            print(e)
+            exit(1)
 
-    def get_network_status(self, network_identifier):
-        network_request = NetworkRequest(network_identifier)
+    def get_block(self, blockid=None):
         try:
-            network_api_instance = NetworkApi(self.rosetta_client)
-            return network_api_instance.network_status(network_request)
-        except ApiException as e:
-            print("Exception when calling NetworkApi->network_status: %s\n" % e)
-
-    def get_block(self, block_identifier=None):
-        network_identifier = self.get_network_list()
-        if type(block_identifier) is cardano_rosetta.model.block_identifier.BlockIdentifier:
-            block_identifier = PartialBlockIdentifier(index=block_identifier.index, hash=block_identifier.hash)
-
-        if not block_identifier:
-            network_status = self.get_network_status(network_identifier)
-            full_block = network_status.current_block_identifier
-            block_identifier = PartialBlockIdentifier(index=full_block.index, hash=full_block.hash)
-
-        block_request = BlockRequest(network_identifier, block_identifier)
-        try:
-            block_api_instance = BlockApi(self.rosetta_client)
-            return block_api_instance.block(block_request)
-        except ApiException as e:
-            print("Exception when calling BlockApi->block: %s\n" % e)
+            if blockid:
+                return self.blockfrost.block(hash_or_number=blockid)
+            return self.blockfrost.block_latest()
+        except ApiError as e:
+            print(e)
+            exit(1)
 
     def get_slot_tip(self):
         block = self.get_block()
-        return int(block.block.metadata.slot_no)
+        return block.slot
 
     def fetch_utxos_address(self, address):
         utxos = []
@@ -692,6 +652,25 @@ class AdaWallet:
                     sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
 
+    def bulk_drain_tx(self, send_addr, out_file, fee, ttl=None, sign=False):
+        if sign:
+            suffix="txsigned"
+        else:
+            suffix="txbody"
+
+        sum_result = (0, 0, 0, 0)
+
+        with open(out_file, "wb") as f2:
+            with tarfile.open(fileobj=f2, mode='w:gz') as tar:
+                for account in self.accounts:
+                    with tempfile.NamedTemporaryFile("w+") as tx:
+                        result = self.drain_tx(int(account), send_addr, tx.name, fee, ttl, sign)
+                        if result == None:
+                            continue
+                        tar.add(tx.name, f"{account}.{suffix}")
+                    sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
+        return sum_result
+
     def migrate_wallet(self, accounts_file, out_file, fee, ttl=None, sign=False):
         if sign:
             suffix="txsigned"
@@ -745,10 +724,19 @@ class AdaWallet:
             result = self.build_tx(account, out_file, fee, certificates=[delegation_certificate.name], ttl=ttl, sign=sign, stake=True)
         return result
 
-    def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False):
+    def drain_tx(self, account, send_addr, out_file, fee, ttl=None, sign=False):
+        stake_address = self.accounts[account]["stake_address"]
+        withdrawals = self.get_rewards_for_stake_address(stake_address)
+        if withdrawals != None:
+            return self.build_tx(account, out_file, fee, withdrawals=withdrawals, ttl=ttl, sign=sign, stake=True, change_address=send_addr)
+        return None
+
+    def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False, change_address=None):
+        account_address = self.accounts[account]["address"]
+        if change_address == None:
+            change_address = account_address
         if not ttl:
             ttl = self.get_slot_tip() + 5000
-        account_address = self.accounts[account]["address"]
         out_total = 0
         in_total = 0
 
@@ -756,7 +744,6 @@ class AdaWallet:
           "cardano-cli",
           "transaction",
           "build-raw",
-          "--mary-era",
           "--ttl",
           str(ttl),
           "--out-file",
@@ -780,7 +767,7 @@ class AdaWallet:
 
         change = in_total - out_total - fee - deposit
         if change >= 1000000:
-            cli_args.extend(["--tx-out", f"{account_address}+{change}"])
+            cli_args.extend(["--tx-out", f"{change_address}+{change}"])
         elif change == 0:
             pass
         elif change < 1000000 and change > 0:
@@ -800,28 +787,17 @@ class AdaWallet:
         return((in_total, out_total, fee, change))
 
     def get_utxos_for_address(self, address):
-        # Create an instance of the API class
-        network_identifier = self.get_network_list()
-        network_status = self.get_network_status(network_identifier)
-
-        account_api_instance = AccountApi(self.rosetta_client)
-        account_identifier = AccountIdentifier(address)
-        ada = Currency(symbol='ADA', decimals=6)
-        utxo_request = AccountCoinsRequest(network_identifier=network_identifier, account_identifier=account_identifier, include_mempool=False, currencies=[ada])
+        utxos = []
         try:
-            coins = account_api_instance.account_coins(utxo_request).coins
-            utxos = []
-            for coin in coins:
-                has_tokens = False
-                if hasattr(coin, 'metadata'):
-                    for k,meta in coin.metadata.items():
-                        for entry in meta:
-                            if 'tokens' in entry:
-                                has_tokens=True
-                if not has_tokens:
-                    (txid, index) = coin.coin_identifier.identifier.split(":")
-                    amount = coin.amount.value
-                    utxos.append((txid, index, address, coin.amount.value))
-            return utxos
-        except ApiException as e:
-            print("Exception when calling AccountApi->account_balance: %s\n" % e)
+            bf_utxos = self.blockfrost.address_utxos(address=address)
+        except ApiError as e:
+            print(e)
+            exit(1)
+        for utxo in bf_utxos:
+            # TODO: this is a hack assuming utxo only has lovelace if amount == 1
+            if len(utxo.amount) == 1:
+                amount = utxo.amount[0].quantity
+                txid = utxo.tx_hash
+                index = utxo.tx_index
+                utxos.append((txid, index, address, amount))
+        return utxos

@@ -1,4 +1,4 @@
-{ stdenv, lib, fetchurl, patchelf, libusb, libudev }:
+{ stdenv, lib, fetchurl, patchelf, libusb, udev }:
 
 let
   version = "1.9.1";
@@ -17,10 +17,10 @@ in stdenv.mkDerivation {
     mkdir -p $out/bin
     mkdir -p "$BASH_COMPLETIONS"
     patchelf --set-interpreter ${stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 cardano-hw-cli
-    patchelf --set-rpath ${lib.makeLibraryPath [ stdenv.cc.cc libusb libudev ]} cardano-hw-cli
-    patchelf --set-rpath ${lib.makeLibraryPath [ stdenv.cc.cc libusb libudev ]} Release/usb_bindings.node
-    patchelf --set-rpath ${lib.makeLibraryPath [ stdenv.cc.cc libusb libudev ]} Release/HID.node
-    patchelf --set-rpath ${lib.makeLibraryPath [ stdenv.cc.cc libusb libudev ]} Release/HID-hidraw.node
+    patchelf --set-rpath ${lib.makeLibraryPath [ stdenv.cc.cc libusb udev ]} cardano-hw-cli
+    patchelf --set-rpath ${lib.makeLibraryPath [ stdenv.cc.cc libusb udev ]} Release/usb_bindings.node
+    patchelf --set-rpath ${lib.makeLibraryPath [ stdenv.cc.cc libusb udev ]} Release/HID.node
+    patchelf --set-rpath ${lib.makeLibraryPath [ stdenv.cc.cc libusb udev ]} Release/HID-hidraw.node
     cp cardano-hw-cli $out/bin/cardano-hw-cli
     cp -a Release $out/bin/
     cp package.json $out/bin//package.json
