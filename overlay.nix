@@ -22,9 +22,9 @@ in {
     version = "1.0.0";
     src = ./adawallet;
     propagatedBuildInputs = with final; [
-      cardano-rosetta-py
       python3Packages.docopt
       python3Packages.apsw
+      blockfrost
     ];
     doCheck = false;
     postInstall = ''
@@ -50,30 +50,20 @@ in {
     };
     doCheck = false;
   };
-
-  nulltype = final.python3Packages.buildPythonApplication rec {
-    pname = "nulltype";
-    version = "2.3.1";
-    src = final.fetchurl {
-      url = "https://files.pythonhosted.org/packages/2f/ce/92289851364b7f816a839c8064aac06c01f3a3ecf33ab04adf9d0a0ab66a/nulltype-2.3.1.zip";
-      sha256 = "sha256-ZKo8sqtekE0bNxdbm5Ir6iaME/nOMuPTczExUKte8nI=";
+  blockfrost = final.python3Packages.buildPythonPackage rec {
+    pname = "blockfrost-python";
+    version = "0.5.3";
+    propagatedBuildInputs = [
+      final.python3Packages.requests
+      final.python3Packages.setuptools
+    ];
+    src = final.python3Packages.fetchPypi {
+      inherit pname version;
+      sha256 = "sha256-MVS5mGfncUyQBkyeGjfjt6+XwQe2RUndDUJKqjIJAX4=";
     };
     doCheck = false;
   };
 
-  cardano-rosetta-py = let
-    src = final.runCommand "cardano-rosetta-py-src" { buildInputs = [ final.openapi-generator-cli ]; } ''
-      mkdir $out
-      cd $out
-      openapi-generator-cli generate -i ${inputs.cardano-rosetta}/cardano-rosetta-server/src/server/openApi.json -g python --additional-properties=packageName=cardano_rosetta
-    '';
-  in final.python3Packages.buildPythonPackage {
-    inherit src;
-    version = "0.0.0";
-    propagatedBuildInputs = with final.python3Packages; [ certifi urllib3 dateutil final.nulltype ];
-    pname = "cardano-rosetta-py";
-    doCheck = false;
-  };
   devShell = prev.mkShell rec {
     nativeBuildInputs = with final; [
       cardano-cli
@@ -82,7 +72,7 @@ in {
       cardano-completions
       python3Packages.ipython
       python3Packages.apsw
-      cardano-rosetta-py
+      blockfrost
       adawallet
     ];
     XDG_DATA_DIRS = with final.lib; concatStringsSep ":" (
