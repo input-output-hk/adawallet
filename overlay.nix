@@ -1,21 +1,7 @@
 { inputs, self }:
-final: prev:
-let
-  inherit (final) lib;
-in {
+final: prev: {
   cardano-hw-cli = final.callPackage ./cardano-hw-cli {};
-  cardano-completions = final.runCommand "cardano-completions" {} ''
-    BASH_COMPLETIONS=$out/share/bash-completion/completions
-    mkdir -p $BASH_COMPLETIONS
-    ${final.cardano-cli}/bin/cardano-cli --bash-completion-script cardano-cli > $BASH_COMPLETIONS/cardano-cli
-    ${final.cardano-node}/bin/cardano-node --bash-completion-script cardano-node > $BASH_COMPLETIONS/cardano-node
-    ${final.cardano-addresses-cli}/bin/cardano-address --bash-completion-script cardano-address > $BASH_COMPLETIONS/cardano-address
-    ${final.bech32}/bin/bech32 --bash-completion-script bech32 > $BASH_COMPLETIONS/bech32
-  '';
-
-  inherit (inputs.cardano-node.legacyPackages.x86_64-linux) cardano-node cardano-cli bech32;
-
-  cardano-addresses-cli = inputs.cardano-addresses.packages.x86_64-linux."cardano-addresses-cli:exe:cardano-address";
+  inherit (inputs.cardano-parts.packages.x86_64-linux) cardano-node cardano-cli bech32 cardano-address;
 
   adawallet = final.python3Packages.buildPythonApplication {
     pname = "adawallet";
@@ -68,8 +54,7 @@ in {
     nativeBuildInputs = with final; [
       cardano-cli
       cardano-hw-cli
-      cardano-addresses-cli
-      cardano-completions
+      cardano-address
       python3Packages.ipython
       python3Packages.apsw
       blockfrost
