@@ -3,7 +3,7 @@ final: prev: {
   cardano-hw-cli = final.callPackage ./cardano-hw-cli {};
   inherit (inputs.cardano-parts.packages.x86_64-linux) bech32 cardano-address;
   # Use 8.10.0-pre directly from node repository
-  inherit (inputs.cardano-node.legacyPackages.x86_64-linux) cardano-node cardano-cli;
+  inherit (inputs.cardano-node.legacyPackages.x86_64-linux) cardano-node cardano-cli scripts;
 
   adawallet = final.python3Packages.buildPythonApplication {
     pname = "adawallet";
@@ -62,6 +62,7 @@ final: prev: {
       python3Packages.apsw
       blockfrost
       adawallet
+      scripts.private.node
     ];
     XDG_DATA_DIRS = with final.lib; concatStringsSep ":" (
       [(builtins.getEnv "XDG_DATA_DIRS")] ++
