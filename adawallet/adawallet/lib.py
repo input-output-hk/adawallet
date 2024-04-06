@@ -1,15 +1,12 @@
-import binascii
 import json
 import subprocess
 import tempfile
-import time
 import os
-import sys
 import apsw
 import tarfile
 from pathlib import Path
 
-from blockfrost import BlockFrostApi, ApiError, ApiUrls
+from blockfrost import BlockFrostApi, ApiError
 
 def input_mnemonic():
     data = input('Input 1st word or entire mnemonic: ')
@@ -49,7 +46,7 @@ class AdaWallet:
         cursor = self.db.cursor()
         cursor.execute("create table status(hw_wallet,root_key,testnet,rosetta_url)")
         cursor.execute("create table utxo(txid,tx_index,address,amount)")
-        cursor.execute("create table accounts(id,payment_vkey,payment_skey,stake_vkey,stake_skey,address,stake_address)")
+        cursor.execute("create table accounts(id,payment_vkey,payment_skey,stake_vkey,stake_skey,drep_vkey,drep_skey,cc_cold_vkey,cc_cold_skey,cc_hot_vkey,cc_hot_skey,address,stake_address)")
 
     def load_state(self):
         if not os.path.exists(self.state_dir / "data.sqlite"):
@@ -72,12 +69,18 @@ class AdaWallet:
             else:
                 self.magic_args = ["--mainnet"]
             rows = cursor.execute("select * from accounts")
-            for (index, payment_vkey, payment_skey, stake_vkey, stake_skey, address, stake_address) in rows:
+            for (index, payment_vkey, payment_skey, stake_vkey, stake_skey, drep_vkey, drep_skey, cc_cold_vkey, cc_cold_skey, cc_hot_vkey, cc_hot_skey, address, stake_address) in rows:
                 self.accounts[index] = {
                         "payment_vkey": payment_vkey,
                         "payment_skey": payment_skey,
                         "stake_vkey": stake_vkey,
                         "stake_skey": stake_skey,
+                        "drep_vkey": drep_vkey,
+                        "drep_skey": drep_skey,
+                        "cc_cold_vkey": cc_cold_vkey,
+                        "cc_cold_skey": cc_cold_skey,
+                        "cc_hot_vkey": cc_hot_vkey,
+                        "cc_hot_skey": cc_hot_skey,
                         "address": address,
                         "stake_address": stake_address
                 }
@@ -169,12 +172,15 @@ class AdaWallet:
             if account not in self.accounts:
                 payment_vkey, payment_skey = self.derive_account_keys(account, "payment")
                 stake_vkey, stake_skey = self.derive_account_keys(account, "stake")
+                drep_vkey, drep_skey = self.derive_account_keys(account, "drep")
+                cc_cold_vkey, cc_cold_skey = self.derive_account_keys(account, "cc_cold")
+                cc_hot_vkey, cc_hot_skey = self.derive_account_keys(account, "cc_hot")
                 address = self.build_address(payment_vkey, stake_vkey)
                 stake_address = self.build_stake_address(stake_vkey)
-                account_keys = (account, payment_vkey, payment_skey, stake_vkey, stake_skey, address, stake_address)
+                account_keys = (account, payment_vkey, payment_skey, stake_vkey, stake_skey, drep_vkey, drep_skey, cc_cold_vkey, cc_cold_skey, cc_hot_vkey, cc_hot_skey, address, stake_address)
                 self.write_account(account_keys)
         elif type(account) == dict and account["index"] not in self.accounts:
-            account_keys = (account["index"], account["payment_vkey"], account["payment_skey"], account["stake_vkey"], account["stake_skey"], account["address"], account["stake_address"])
+            account_keys = (account["index"], account["payment_vkey"], account["payment_skey"], account["stake_vkey"], account["stake_skey"], account["drep_vkey"], account["drep_skey"], account["cc_cold_vkey"], account["cc_cold_skey"], account["cc_hot_vkey"], account["cc_hot_skey"], account["address"], account["stake_address"])
             self.write_account(account_keys)
         if reload_state:
             self.load_state()
@@ -193,7 +199,7 @@ class AdaWallet:
 
     def write_account(self, account_keys):
         cursor = self.db.cursor()
-        cursor.execute("insert into accounts values(?,?,?,?,?,?,?)", account_keys)
+        cursor.execute("insert into accounts values(?,?,?,?,?,?,?,?,?,?,?,?,?)", account_keys)
 
     def build_address(self, payment_vkey, stake_vkey):
         with tempfile.NamedTemporaryFile("w+") as payment, tempfile.NamedTemporaryFile("w+") as stake:
@@ -248,7 +254,7 @@ class AdaWallet:
                 stake_hws = tempfile.NamedTemporaryFile("w+")
                 account_args.extend(["--path", f"1852H/1815H/{i}H/0/0", "--hw-signing-file", payment_hws.name, "--verification-key-file", payment_vkey.name])
                 account_args.extend(["--path", f"1852H/1815H/{i}H/2/0", "--hw-signing-file", stake_hws.name, "--verification-key-file", stake_vkey.name])
-                key_files.append((i, payment_vkey, payment_hws, stake_vkey, stake_hws))
+                key_files.append((i, payment_vkey, payment_hws, stake_vkey, stake_hws, None, None, None, None, None, None))
 
             cli_args = [
                 "cardano-hw-cli",
@@ -275,11 +281,24 @@ class AdaWallet:
     def derive_account_keys(self, account, role):
         if role == "stake":
             role_index = 2
+            cli_flag = f"--shelley-{role}-key"
         elif role == "payment":
             role_index = 0
+            cli_flag = f"--shelley-{role}-key"
+        elif role == "drep":
+            role_index = 3
+            cli_flag = f"--drep-key"
+        elif role == "cc_cold":
+            role_index = 4
+            cli_flag = f"--cc-cold-key"
+        elif role == "cc_hot":
+            role_index = 5
+            cli_flag = f"--cc-hot-key"
         else:
             raise Exception(f"Role {role} not supported!")
         if self.hardware_wallet:
+            if role in [ "drep", "cc_cold", "cc_hot" ]:
+                return (None, None)
             with tempfile.NamedTemporaryFile("w+") as vkey, tempfile.NamedTemporaryFile("w+") as hws:
                 cli_args = [
                     "cardano-hw-cli",
@@ -315,9 +334,10 @@ class AdaWallet:
                 child_skey = p.stdout.rstrip()
                 cli_args = [
                     "cardano-cli",
+                    "conway",
                     "key",
                     "convert-cardano-address-key",
-                    f"--shelley-{role}-key",
+                    cli_flag,
                     "--signing-key-file",
                     "/dev/stdin",
                     "--out-file",
@@ -330,6 +350,7 @@ class AdaWallet:
 
                 cli_args = [
                     "cardano-cli",
+                    "conway",
                     "key",
                     "verification-key",
                     "--signing-key-file",
@@ -341,6 +362,12 @@ class AdaWallet:
                 if p.returncode != 0:
                     print(p.stderr)
                     raise Exception(f"Unknown error converting signing key to verification extended key for {account}")
+
+                # TODO: remove when CLI supports extended vkey for CC
+                if role in [ "cc_cold", "cc_hot" ]:
+                    skey_contents = skey.read()
+                    vkey_contents = vkeyx.read()
+                    return (vkey_contents, skey_contents)
 
                 cli_args = [
                     "cardano-cli",

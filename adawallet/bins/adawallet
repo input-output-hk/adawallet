@@ -14,7 +14,7 @@ Usage:
     adawallet export-utxos --utxo-file FILE
     adawallet export-accounts --accounts-file FILE
     adawallet import-accounts --accounts-file FILE
-    adawallet bulk-witness-tx --transactions-file FILE --out-file FILE [--payment | --stake]
+    adawallet bulk-witness-tx --transactions-file FILE --out-file FILE [--payment | --stake | --drep | --cc-cold | --cc-hot ]
     adawallet bulk-sign-tx --transactions-file FILE --out-file FILE [--stake]
     adawallet stake-registration-tx --account 0 --fee 210000 --out-file FILE [--ttl 5000000] [--sign] [--deposit 2000000]
     adawallet bulk-stake-registration-tx --fee 210000 --out-file FILE [--ttl 5000000] [--sign] [--deposit 2000000]
@@ -24,7 +24,7 @@ Usage:
     adawallet bulk-drain-tx --address STRING --fee 210000 --out-file FILE [--ttl 5000000] [--sign]
     adawallet send-tx --account 0 --address addr1q8ugkffj2mvs9stmcjxcsm3tfxpsn9dzt5whyq9u4vjq4cgzft2upy983gut8q23q3c92h60r9nvxs267acrma9z9pmst5p439 --amount 5000000 --fee 200000 --out-file FILE [--ttl 5000000] [--sign]
     adawallet sign-tx --account 0 --tx-body-file FILE --out-file FILE [--stake]
-    adawallet witness-tx --account 0 --tx-body-file FILE --out-file FILE [--payment | --stake]
+    adawallet witness-tx --account 0 --tx-body-file FILE --out-file FILE [--payment | --stake | --drep | --cc-cold | --cc-hot ]
     adawallet bulk-tx --recipients FILE --account 0 --fee 170000 --out-file FILE [--ttl 5000000] [--sign]
     adawallet migrate-wallet --accounts-file FILE --fee 170000 --out-file FILE [--ttl 5000000] [--sign]
     adawallet wipe
@@ -150,6 +150,15 @@ elif arguments['witness-tx']:
         elif arguments["--stake"]:
             adawallet.witness_tx(int(arguments["--account"]), arguments["--tx-body-file"], arguments["--out-file"], "stake")
             exit(0)
+        elif arguments["--drep"]:
+            adawallet.witness_tx(int(arguments["--account"]), arguments["--tx-body-file"], arguments["--out-file"], "drep")
+            exit(0)
+        elif arguments["--cc-cold"]:
+            adawallet.witness_tx(int(arguments["--account"]), arguments["--tx-body-file"], arguments["--out-file"], "cc_cold")
+            exit(0)
+        elif arguments["--cc-hot"]:
+            adawallet.witness_tx(int(arguments["--account"]), arguments["--tx-body-file"], arguments["--out-file"], "cc_hot")
+            exit(0)
         else:
             print("Most specify --payment or --stake flag")
             exit(1)
@@ -174,8 +183,17 @@ elif arguments['bulk-witness-tx']:
         elif arguments["--stake"]:
             adawallet.bulk_witness_tx(arguments["--transactions-file"], arguments["--out-file"], "stake")
             exit(0)
+        elif arguments["--drep"]:
+            adawallet.bulk_witness_tx(arguments["--transactions-file"], arguments["--out-file"], "drep")
+            exit(0)
+        elif arguments["--cc-cold"]:
+            adawallet.bulk_witness_tx(arguments["--transactions-file"], arguments["--out-file"], "cc_cold")
+            exit(0)
+        elif arguments["--cc-hot"]:
+            adawallet.bulk_witness_tx(arguments["--transactions-file"], arguments["--out-file"], "cc_hot")
+            exit(0)
         else:
-            print("Most specify --payment or --stake flag")
+            print("Must specify --payment or --stake flag")
             exit(1)
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
