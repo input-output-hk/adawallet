@@ -3,7 +3,7 @@
 
 Usage:
     adawallet init-create [--testnet] [--rosetta-url URL]
-    adawallet init-restore [--testnet] [--rosetta-url URL]
+    adawallet init-restore [--testnet] [--rosetta-url URL] [--stdin]
     adawallet init-hardware [--testnet] [--rosetta-url URL]
     adawallet init-read-only [--testnet] [--rosetta-url URL]
     adawallet import-accounts -s 0 -e 7 [--accounts-file FILE]
@@ -95,9 +95,10 @@ elif arguments['init-hardware']:
 
 elif arguments['init-restore']:
     testnet = arguments['--testnet']
-    adawallet.wipe()
+    interactive=(not arguments["--stdin"])
+    adawallet.wipe(prompt=interactive)
     adawallet.initialize(testnet, arguments['--rosetta-url'])
-    mnemonic = input_mnemonic()
+    mnemonic = input_mnemonic(interactive)
     adawallet.load_wallet_from_mnemonic(mnemonic)
     exit(0)
 

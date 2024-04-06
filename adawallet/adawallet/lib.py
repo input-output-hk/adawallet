@@ -8,8 +8,11 @@ from pathlib import Path
 
 from blockfrost import BlockFrostApi, ApiError
 
-def input_mnemonic():
-    data = input('Input 1st word or entire mnemonic: ')
+def input_mnemonic(interactive=True):
+    if interactive:
+        data = input('Input 1st word or entire mnemonic: ')
+    else:
+        data = input()
     words = data.split(" ")
     if len(words) > 10:
         return words
