@@ -1,7 +1,9 @@
 { inputs, self }:
 final: prev: {
   cardano-hw-cli = final.callPackage ./cardano-hw-cli {};
-  inherit (inputs.cardano-parts.packages.x86_64-linux) cardano-node cardano-cli bech32 cardano-address;
+  inherit (inputs.cardano-parts.packages.x86_64-linux) bech32 cardano-address;
+  # Use 8.10.0-pre directly from node repository
+  inherit (inputs.cardano-node.legacyPackages.x86_64-linux) cardano-node cardano-cli;
 
   adawallet = final.python3Packages.buildPythonApplication {
     pname = "adawallet";
@@ -52,6 +54,7 @@ final: prev: {
 
   devShell = prev.mkShell rec {
     nativeBuildInputs = with final; [
+      cardano-node
       cardano-cli
       cardano-hw-cli
       cardano-address
