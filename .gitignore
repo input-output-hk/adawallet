@@ -1,0 +1,11 @@
+.ghc.environment.*
+.nix-shell-cabal.project
+/cabal.project.diff
+/cabal.project.freeze
+/cabal.project.local*
+/cabal.project.old
+dist-newstyle/
+dist-profiled/
+dist/
+result*
+.direnv
