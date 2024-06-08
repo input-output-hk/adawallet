@@ -1,9 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module AdaWallet (main) where
 
 import Control.Monad
+import Data.Foldable (traverse_)
 import qualified Data.Text as T
 import Database.Sqlite
 import Options.Applicative hiding (columns)
@@ -30,9 +30,7 @@ stateDir :: IO FilePath
 stateDir = do
   fromEnv <- lookupEnv "ADAWALLET_STATE"
   let fromXdg = System.Directory.getXdgDirectory System.Directory.XdgData "adawallet"
-  case fromEnv of
-    Nothing -> fromXdg
-    Just dir -> pure dir
+  maybe fromXdg pure fromEnv
 
 walletName :: IO String
 walletName = do
@@ -48,15 +46,12 @@ createDatabase = do
   walletName' <- walletName
   let sqliteFile = stateDir' ++ "/" ++ walletName' ++ ".sqlite"
   conn <- open $ T.pack sqliteFile
-  smt <- prepare conn "CREATE TABLE IF NOT EXISTS status(hw_wallet,root_key,testnet,blockfrost_url);"
-  smt2 <- prepare conn "CREATE TABLE IF NOT EXISTS utxo(txid,tx_index,address,amount);"
-  smt3 <-
-    prepare
-      conn
-      "CREATE TABLE IF NOT EXISTS accounts(id,payment_vkey,payment_skey,stake_vkey,stake_skey,address,stake_address);"
-  _ <- stepConn conn smt >> columns smt
-  _ <- stepConn conn smt2 >> columns smt2
-  _ <- stepConn conn smt3 >> columns smt3
-  finalize smt
-  finalize smt2
-  finalize smt3
+
+  let queries =
+        map
+          (prepare conn)
+          [ "CREATE TABLE IF NOT EXISTS status(hw_wallet,root_key,testnet,blockfrost_url);"
+          , "CREATE TABLE IF NOT EXISTS utxo(txid,tx_index,address,amount);"
+          , "CREATE TABLE IF NOT EXISTS accounts(id,payment_vkey,payment_skey,stake_vkey,stake_skey,address,stake_address);"
+          ]
+  forM_ queries (>>= stepConn conn)
