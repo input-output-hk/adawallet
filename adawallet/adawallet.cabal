@@ -2,9 +2,9 @@ cabal-version: 3.0
 
 name:                   adawallet
 version:                0.0
-description:            The Cardano command-line interface.
-author:                 IOHK
-maintainer:             operations@iohk.io
+description:            The Cardano command-line wallet.
+author:                 Hard Fork Company
+maintainer:             sam@hardfork.company
 license:                Apache-2.0
 build-type:             Simple
 
@@ -44,7 +44,7 @@ library
 
   hs-source-dirs:       src
 
-  exposed-modules:      Adawallet
+  exposed-modules:      AdaWallet
 
   build-depends:        aeson             >= 1.5.6.0
                       , MissingH
@@ -75,6 +75,6 @@ library
 
 executable adawallet
   import:               base, project-config
-  main-is:              adawallet.hs
+  main-is:              Main.hs
   build-depends:        adawallet
   ghc-options:          -threaded

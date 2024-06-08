@@ -6,17 +6,19 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE TupleSections #-}
-
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 {- HLINT ignore "Use let" -}
 
-module Adawallet (main) where
+module AdaWallet (main) where
 
 import Prelude
 
 main :: IO ()
 main = putStrLn "Hello World"
+
+foo :: IO ()
+foo = putStrLn "Foo"
