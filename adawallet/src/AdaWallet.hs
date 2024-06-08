@@ -1,11 +1,12 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{- HLINT ignore "Use let" -}
 
 module AdaWallet (main) where
 
 import Control.Monad
-import Options.Applicative
+import qualified Data.Text as T
+import Database.Sqlite
+import Options.Applicative hiding (columns)
 import System.Directory
 import System.Environment
 import Prelude
@@ -13,17 +14,11 @@ import Prelude
 main :: IO ()
 main = join $ execParser (info opts idm)
 
-foo :: IO ()
-foo = putStrLn "Foo"
-
-data CLI = CLI
-  { quiet :: Bool
-  }
-
 opts :: Parser (IO ())
 opts =
   hsubparser
     ( command "wipe" (info (pure wipeCommand) (progDesc "wipe all state"))
+        <> command "create" (info (pure createDatabase) (progDesc "create sqlite database"))
     )
 
 wipeCommand :: IO ()
@@ -45,3 +40,14 @@ walletName = do
   case fromEnv of
     Nothing -> pure "default"
     Just name -> pure name
+
+createDatabase :: IO ()
+createDatabase = do
+  stateDir' <- stateDir
+  createDirectoryIfMissing True stateDir'
+  walletName' <- walletName
+  let sqliteFile = stateDir' ++ "/" ++ walletName' ++ ".sqlite"
+  conn <- open $ T.pack sqliteFile
+  smt <- prepare conn "CREATE TABLE IF NOT EXISTS status(hw_wallet,root_key,testnet,blockfrost_url);"
+  res <- stepConn conn smt >> columns smt
+  finalize smt

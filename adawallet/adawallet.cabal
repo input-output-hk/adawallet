@@ -59,6 +59,7 @@ library
                       , ouroboros-consensus
                       , ouroboros-network-protocols
                       , parsec
+                      , persistent-sqlite
                       , servant-client
                       , split
                       , stm
