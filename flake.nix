@@ -41,7 +41,7 @@
         inherit (nixpkgs) lib;
 
         # see flake `variants` below for alternative compilers
-        defaultCompiler = "ghc964";
+        defaultCompiler = "ghc965";
         # We use cabalProject' to ensure we don't build the plan for
         # all systems.
         cabalProject = nixpkgs.haskell-nix.cabalProject' ({config, ...}: {
@@ -131,9 +131,9 @@
         flake = cabalProject.flake (
           lib.optionalAttrs (system == "x86_64-linux") {
             # on linux, build/test other supported compilers
-            variants = lib.genAttrs ["ghc8107"] (compiler-nix-name: {
-              inherit compiler-nix-name;
-            });
+            #variants = lib.genAttrs ["ghc8107"] (compiler-nix-name: {
+            #  inherit compiler-nix-name;
+            #});
           }
         );
       in
