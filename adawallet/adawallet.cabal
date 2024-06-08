@@ -56,22 +56,17 @@ library
                       , containers
                       , either
                       , formatting
-                      , http-api-data
-                      , http-client-tls
-                      , http-media
-                      , iproute
-                      , network
                       , ouroboros-consensus
                       , ouroboros-network-protocols
                       , parsec
                       , servant-client
-                      , servant-server
                       , split
                       , stm
                       , text
                       , time
                       , transformers-except
-                      , warp
+                      , directory
+                      , optparse-applicative
 
 executable adawallet
   import:               base, project-config

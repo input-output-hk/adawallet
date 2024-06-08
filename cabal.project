@@ -42,7 +42,7 @@ package comonad
 -- Have to specify  '-Werror' for each package until this is released:
 -- https://github.com/haskell/cabal/issues/3579
 
-package cardano-faucet
+package adawallet
   --ghc-options: -Werror
 
 -- IMPORTANT
