@@ -139,3 +139,6 @@ result*
 wallets
 database.sqlite3
 .direnv
+
+# Wallet
+scripts/saw
