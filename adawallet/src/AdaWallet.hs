@@ -49,5 +49,14 @@ createDatabase = do
   let sqliteFile = stateDir' ++ "/" ++ walletName' ++ ".sqlite"
   conn <- open $ T.pack sqliteFile
   smt <- prepare conn "CREATE TABLE IF NOT EXISTS status(hw_wallet,root_key,testnet,blockfrost_url);"
-  res <- stepConn conn smt >> columns smt
+  smt2 <- prepare conn "CREATE TABLE IF NOT EXISTS utxo(txid,tx_index,address,amount);"
+  smt3 <-
+    prepare
+      conn
+      "CREATE TABLE IF NOT EXISTS accounts(id,payment_vkey,payment_skey,stake_vkey,stake_skey,address,stake_address);"
+  _ <- stepConn conn smt >> columns smt
+  _ <- stepConn conn smt2 >> columns smt2
+  _ <- stepConn conn smt3 >> columns smt3
   finalize smt
+  finalize smt2
+  finalize smt3
