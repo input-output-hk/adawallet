@@ -1,11 +1,27 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 
 module AdaWallet (main) where
 
+import Cardano.Address.Derivation (Depth (RootK), XPrv, genMasterKeyFromMnemonic)
+import Cardano.Address.Style.Shelley (Shelley)
+import Cardano.Mnemonic (
+  entropyToMnemonic,
+  genEntropy,
+  getMkSomeMnemonicError,
+  mkSomeMnemonic,
+  mnemonicToText,
+ )
+import Cardano.Prelude (ExceptT, runExceptT)
+import Control.Exception (throwIO)
 import Control.Monad (forM_, join)
+import Control.Monad.Trans.Except.Extra (left)
 import Data.Foldable (traverse_)
 import qualified Data.Text as T
-import Database.Sqlite (open, prepare, stepConn)
+import qualified Data.Text.IO as TI
+import Database.Persist.Sqlite (PersistValue (PersistText), toPersistValue)
+import Database.Sqlite (Connection, bind, close, finalize, open, prepare, stepConn)
 import Options.Applicative (Parser, command, execParser, hsubparser, idm, info, progDesc)
 import System.Directory (
   XdgDirectory (..),
@@ -53,12 +69,7 @@ walletName = do
 -- TODO: do more than just create tables
 initialize :: IO ()
 initialize = do
-  stateDir' <- stateDir
-  createDirectoryIfMissing True stateDir'
-  walletName' <- walletName
-  let sqliteFile = stateDir' ++ "/" ++ walletName' ++ ".sqlite"
-  conn <- open $ T.pack sqliteFile
-
+  conn <- openDB
   let queries =
         map
           (prepare conn)
@@ -72,17 +83,40 @@ initialize = do
 restoreWallet :: String -> IO ()
 restoreWallet mmemonic = putStrLn "Not implemented yet"
 
+openDB :: IO Database.Sqlite.Connection
+openDB = do
+  stateDir' <- stateDir
+  createDirectoryIfMissing True stateDir'
+  walletName' <- walletName
+  let sqliteFile = stateDir' ++ "/" ++ walletName' ++ ".sqlite"
+  open $ T.pack sqliteFile
+
 -- Creates a new wallet, prints to stdout and loads the private key into sqlite
 createWallet :: IO ()
-createWallet = putStrLn "Not implemented yet"
+createWallet = do
+  mnemonic <- mnemonicToText @24 . entropyToMnemonic <$> genEntropy
+  TI.putStrLn $ T.unwords mnemonic
+  rootKey <- runExceptT $ mnemonicToRootKey mnemonic
+  case rootKey of
+    Left _ -> return ()
+    Right rootKey' -> do
+      conn <- openDB
+      statement <- prepare conn "INSERT INTO status (hw_wallet,root_key) VALUES (False,?,False,\"\")"
 
--- Restores a wallet from an exported json file comtaining account data with no secrets
-restoreWalletReadOnly :: FilePath -> IO ()
-restoreWalletReadOnly json_file = putStrLn "Not implemented yet"
+      bind statement [PersistText rootKey']
+      stepConn conn statement
+      finalize statement
+      close conn
+      return ()
 
--- Exports accounts to json without secret keys
-exportAccountsNoSecrets :: FilePath -> IO ()
-exportAccountsNoSecrets json_file = putStrLn "Not implemented yet"
+newtype FaucetError = FaucetErrorBadMnemonic T.Text
+
+mnemonicToRootKey :: Monad m => [T.Text] -> ExceptT FaucetError m (Shelley 'RootK XPrv)
+mnemonicToRootKey mnemonic = do
+  mw <-
+    either (left . FaucetErrorBadMnemonic . T.pack . getMkSomeMnemonicError) pure $
+      mkSomeMnemonic @'[24] mnemonic
+  pure $ genMasterKeyFromMnemonic mw mempty
 
 -- Imports accounts for an already restored wallet (0th index for payment/stake/drep/CC cold/CC hot)
 importAccounts :: Int -> Int -> IO ()
