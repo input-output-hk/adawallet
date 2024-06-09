@@ -64,6 +64,7 @@ library
                       , cardano-prelude
                       , containers
                       , either
+                      , FailT
                       , formatting
                       , ouroboros-consensus
                       , ouroboros-network-protocols
