@@ -46,6 +46,7 @@ library
 
   exposed-modules:      AdaWallet
                       , Transaction
+                        Mnemonic.Generation
 
   build-depends:        aeson             >= 1.5.6.0
                       , MissingH
@@ -53,7 +54,9 @@ library
                       , blockfrost-client
                       , bytestring
                       , cardano-addresses
+                      , cardano-addresses-cli
                       , cardano-api ^>= 8.46
+                      , cardano-cli ^>= 8.23
                       , cardano-prelude
                       , containers
                       , either
