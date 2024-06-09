@@ -70,7 +70,7 @@ initialize = do
 
 -- Restores a wallet from a mnemonic and loads the private key into sqlite
 restoreWallet :: String -> IO ()
-restoreWallet mmemonic = putStrLn "Not implemented yet"
+restoreWallet mmemonic = error "Not implemented yet"
 
 -- Creates a new wallet, prints to stdout and loads the private key into sqlite
 createWallet :: HasCallStack => IO ()
@@ -78,25 +78,25 @@ createWallet = error "Not implemented yet"
 
 -- Restores a wallet from an exported json file comtaining account data with no secrets
 restoreWalletReadOnly :: HasCallStack => FilePath -> IO ()
-restoreWalletReadOnly json_file = putStrLn "Not implemented yet"
+restoreWalletReadOnly json_file = error "Not implemented yet"
 
 -- Exports accounts to json without secret keys
 exportAccountsNoSecrets :: HasCallStack => FilePath -> IO ()
-exportAccountsNoSecrets json_file = putStrLn "Not implemented yet"
+exportAccountsNoSecrets json_file = error "Not implemented yet"
 
 -- Imports accounts for an already restored wallet (0th index for payment/stake/drep/CC cold/CC hot)
 importAccounts :: HasCallStack => Int -> Int -> IO ()
-importAccounts start end = putStrLn "Not implemented yet"
+importAccounts start end = error "Not implemented yet"
 
 -- Signs transaction
 -- TODO replace [String] with list of custom types to sign with
 signTx :: HasCallStack => FilePath -> Int -> [String] -> IO ()
-signTx fp account types = putStrLn "Not implemented yet"
+signTx fp account types = error "Not implemented yet"
 
 -- Signs multiple transactions in a tarball
 -- TODO replace [String] with list of custom types to sign with
 bulkSignTx :: HasCallStack => FilePath -> Int -> [String] -> IO ()
-bulkSignTx fp account types = putStrLn "Not implemented yet"
+bulkSignTx fp account types = error "Not implemented yet"
 
 readTx :: HasCallStack => IO ()
 readTx = readBfTx
