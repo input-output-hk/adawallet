@@ -48,8 +48,8 @@ library
                       , Transaction
                         -- TODO: We should put everything in 
                         -- an AdaWallet parent directory.
-                        Mnemonic.Conversion
-                        Mnemonic.Generation
+                      , Mnemonic.Conversion
+                      , Mnemonic.Generation
 
   build-depends:        aeson             >= 1.5.6.0
                       , MissingH
@@ -60,7 +60,7 @@ library
                       , cardano-addresses
                       , cardano-addresses-cli
                       , cardano-api ^>= 8.46
-                      , cardano-cli ^>= 8.23
+                      , cardano-cli ^>= 8.23.1.0
                       , cardano-prelude
                       , containers
                       , either

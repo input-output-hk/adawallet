@@ -197,3 +197,6 @@ rootExtendedPrivateKeyToPrivateKey rootExtendedPrivateKeyBytes = do
         | otherwise = fail
             "When deriving child keys from a parent account key, you must \
             \provide exactly two path segments (role & index)."
+
+
+extendedPrivateKeyToCardanoCliPrivateKey = error "Use cardano-cli's readSomeCardanoAddressSigningKeyFile"
