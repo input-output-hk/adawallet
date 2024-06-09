@@ -76,6 +76,14 @@ restoreWallet mmemonic = putStrLn "Not implemented yet"
 createWallet :: IO ()
 createWallet = putStrLn "Not implemented yet"
 
+-- Restores a wallet from an exported json file comtaining account data with no secrets
+restoreWalletReadOnly :: FilePath -> IO ()
+restoreWalletReadOnly json_file = putStrLn "Not implemented yet"
+
+-- Exports accounts to json without secret keys
+exportAccountsNoSecrets :: FilePath -> IO ()
+exportAccountsNoSecrets json_file = putStrLn "Not implemented yet"
+
 -- Imports accounts for an already restored wallet (0th index for payment/stake/drep/CC cold/CC hot)
 importAccounts :: Int -> Int -> IO ()
 importAccounts start end = putStrLn "Not implemented yet"
