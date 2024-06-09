@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DataKinds #-}
 
 module AdaWallet (main) where
 
@@ -20,6 +22,19 @@ import System.Directory (
 import System.Environment (lookupEnv)
 import Transaction
 import Prelude
+import GHC.Stack
+import Data.Maybe
+import Cardano.Mnemonic (mnemonicToText, entropyToMnemonic, genEntropy, mkMnemonic, MkSomeMnemonic (..), SomeMnemonic)
+import qualified Data.Text.IO as Text
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import System.IO.Extra (hGetPassphraseBytes, hGetSomeMnemonicInteractively)
+import System.IO
+import Options.Applicative.Style (PassphraseInputMode(..), PassphraseInfo (..), PassphraseInput (..))
+import Mnemonic.Generation
+import Control.Exception (throwIO)
+import Data.ByteString (ByteString)
+import Options.Applicative.MnemonicSize (MnemonicSize(..))
 
 main :: IO ()
 main = do
@@ -31,7 +46,7 @@ opts =
   hsubparser
     ( command "wipe" (info (pure wipeCommand) (progDesc "wipe all state"))
         --        <> command "init-restore" (info (pure restoreWallet "foo") (progDesc "Restore a wallet from mnemonic"))
-        <> command "init-create" (info (pure createWallet) (progDesc "create a wallet"))
+        <> command "init-create" (info (pure (createWallet defaultArgs)) (progDesc "create a wallet"))
         --        <> command "import-accounts" (info (pure importAccounts 0 0) (progDesc "create a wallet"))
         <> command "debug-rtx" (info (pure readTx) (progDesc "read tx from blockfrost and print"))
     )
@@ -74,9 +89,37 @@ initialize = do
 restoreWallet :: String -> IO ()
 restoreWallet mmemonic = error "Not implemented yet"
 
+data MnemonicSource =
+    StdInput
+  | Generate
+
+newtype Arg = Arg
+  { source :: MnemonicSource -- Nothing to create
+  }
+
+defaultArgs :: Arg
+defaultArgs = Arg StdInput
+
 -- Creates a new wallet, prints to stdout and loads the private key into sqlite
-createWallet :: HasCallStack => IO ()
-createWallet = error "Not implemented yet"
+createWallet :: HasCallStack => Arg -> IO ()
+createWallet arg = do
+  someMnemonic <- case source arg of
+    StdInput -> do
+      hGetSomeMnemonicInteractively (stdin, stderr) Explicit prompt
+    Generate -> do
+      mnemonic <- createMnemonic MS_24
+      case mkSomeMnemonic @' [24] mnemonic of
+        Left err -> error $ show err
+        Right a -> pure a
+  passphrase <-
+      hGetPassphraseBytes (stdin, stderr) Explicit Interactive promptPass Utf8
+  insertMnemonicPassword someMnemonic passphrase
+  where
+    prompt = "Please enter a [9, 12, 15, 18, 21, 24] word mnemonic:"
+    promptPass = "Enter passphrase (empty for no passphrase):"
+
+insertMnemonicPassword :: SomeMnemonic -> ByteString -> IO ()
+insertMnemonicPassword = error "unimplemented"
 
 -- Restores a wallet from an exported json file comtaining account data with no secrets
 restoreWalletReadOnly :: HasCallStack => FilePath -> IO ()
