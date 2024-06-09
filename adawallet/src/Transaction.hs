@@ -2,26 +2,26 @@
 
 module Transaction where
 
-import qualified Blockfrost.Client as BF
-import Cardano.Api as Api
-import Cardano.Api.Shelley
-import Data.Bifunctor
-import qualified Data.ByteString as BS
-import qualified Data.Foldable as Fld
-import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe)
-import Data.Monoid
-import Data.String (IsString (..))
-import Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as TE
-import qualified Data.Text.Encoding as Text
-import GHC.Stack
-import Money
-import Numeric (readHex)
-import Text.Pretty.Simple
-import Prelude
+import qualified Blockfrost.Client   as BF
+import           Cardano.Api         as Api
+import           Cardano.Api.Shelley
+import           Data.Bifunctor
+import qualified Data.ByteString     as BS
+import qualified Data.Foldable       as Fld
+import qualified Data.Map.Strict     as Map
+import           Data.Maybe          (fromMaybe)
+import           Data.Monoid
+import           Data.String         (IsString (..))
+import           Data.Text           (Text)
+import qualified Data.Text           as T
+import qualified Data.Text           as Text
+import qualified Data.Text.Encoding  as TE
+import qualified Data.Text.Encoding  as Text
+import           GHC.Stack
+import           Money
+import           Numeric             (readHex)
+import           Prelude
+import           Text.Pretty.Simple
 
 readBfTx :: HasCallStack => IO ()
 readBfTx = do
