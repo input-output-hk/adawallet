@@ -53,8 +53,8 @@ package adawallet
 source-repository-package
     type: git
     location: https://github.com/input-output-hk/cardano-addresses
-    tag: ed83fe7457da9adb53bb92acd0e79c321bd25646
-    --sha256: sha256-saxnZMeeZcASesw2Fgg9X0I8YFQ7p8jD25TMt782i2s=
+    tag: 900cc16233b4751054f0057307e88b4e5d171248
+    --sha256: sha256-TgfMxYxq87cU2r6QtAwJxAXLOEWlRBXI0em2ACiyrWc=
     subdir: command-line
             core
 

@@ -4,8 +4,10 @@ module AdaWallet (main) where
 
 import Control.Monad (forM_, join)
 import Data.Foldable (traverse_)
+import Data.Maybe
 import qualified Data.Text as T
 import Database.Sqlite (open, prepare, stepConn)
+import GHC.Stack
 import Options.Applicative (Parser, command, execParser, hsubparser, idm, info, progDesc)
 import System.Directory (
   XdgDirectory (..),
@@ -14,10 +16,8 @@ import System.Directory (
   removePathForcibly,
  )
 import System.Environment (lookupEnv)
-import Prelude
 import Transaction
-import GHC.Stack
-import Data.Maybe
+import Prelude
 
 main :: IO ()
 main = do
@@ -74,7 +74,7 @@ restoreWallet mmemonic = putStrLn "Not implemented yet"
 
 -- Creates a new wallet, prints to stdout and loads the private key into sqlite
 createWallet :: HasCallStack => IO ()
-createWallet = putStrLn "Not implemented yet"
+createWallet = error "Not implemented yet"
 
 -- Restores a wallet from an exported json file comtaining account data with no secrets
 restoreWalletReadOnly :: HasCallStack => FilePath -> IO ()
