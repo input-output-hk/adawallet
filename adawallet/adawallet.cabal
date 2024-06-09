@@ -46,12 +46,16 @@ library
 
   exposed-modules:      AdaWallet
                       , Transaction
+                        -- TODO: We should put everything in 
+                        -- an AdaWallet parent directory.
+                        Mnemonic.Conversion
                         Mnemonic.Generation
 
   build-depends:        aeson             >= 1.5.6.0
                       , MissingH
                       , blockfrost-api
                       , blockfrost-client
+                      , bech32
                       , bytestring
                       , cardano-addresses
                       , cardano-addresses-cli
