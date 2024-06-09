@@ -8,6 +8,8 @@ import Data.Maybe
 import qualified Data.Text as T
 import Database.Sqlite (open, prepare, stepConn)
 import GHC.Stack
+import Mnemonic.Conversion (mnemonicToRootExtendedPrivateKey)
+import Mnemonic.Generation (createMnemonic)
 import Options.Applicative (Parser, command, execParser, hsubparser, idm, info, progDesc)
 import System.Directory (
   XdgDirectory (..),

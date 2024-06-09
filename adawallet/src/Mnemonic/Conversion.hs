@@ -33,9 +33,9 @@ data RootExtendedKeyGenerationError
   = MnemonicError (MkSomeMnemonicError '[24])
   | RootKeyGenerationError IOException
 
-nemonicToRootExtendedPrivateKey ::
+mnemonicToRootExtendedPrivateKey ::
   [Text] -> IO (Either RootExtendedKeyGenerationError ByteString)
-nemonicToRootExtendedPrivateKey mnemonic = runExceptT $ do
+mnemonicToRootExtendedPrivateKey mnemonic = runExceptT $ do
   -- TODO: Support password protected mnemonics
   -- TODO: Potentially support Byron, Icarus and Shared mnemonics
   -- TODO: Potentially support other sizes of mnemonics (9, 12, 15, 18, 21)
