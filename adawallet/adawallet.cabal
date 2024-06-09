@@ -54,7 +54,6 @@ library
                       , bytestring
                       , cardano-addresses
                       , cardano-api ^>= 8.46
-                      , cardano-cli ^>= 8.23
                       , cardano-prelude
                       , containers
                       , either
