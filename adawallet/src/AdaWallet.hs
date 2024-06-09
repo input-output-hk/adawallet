@@ -1,18 +1,38 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE DataKinds #-}
 
 module AdaWallet (main) where
 
+import Cardano.Mnemonic (
+  MkSomeMnemonic (..),
+  SomeMnemonic,
+  entropyToMnemonic,
+  genEntropy,
+  mkMnemonic,
+  mnemonicToText,
+ )
+import Control.Exception (throwIO)
 import Control.Monad (forM_, join)
+import Data.ByteString (ByteString)
 import Data.Foldable (traverse_)
 import Data.Maybe
 import qualified Data.Text as T
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import qualified Data.Text.IO as Text
 import Database.Sqlite (open, prepare, stepConn)
 import GHC.Stack
 import Mnemonic.Conversion (mnemonicToRootExtendedPrivateKey)
+import Mnemonic.Generation
 import Mnemonic.Generation (createMnemonic)
 import Options.Applicative (Parser, command, execParser, hsubparser, idm, info, progDesc)
+import Options.Applicative.MnemonicSize (MnemonicSize (..))
+import Options.Applicative.Style (
+  PassphraseInfo (..),
+  PassphraseInput (..),
+  PassphraseInputMode (..),
+ )
 import System.Directory (
   XdgDirectory (..),
   createDirectoryIfMissing,
@@ -20,21 +40,10 @@ import System.Directory (
   removePathForcibly,
  )
 import System.Environment (lookupEnv)
+import System.IO
+import System.IO.Extra (hGetPassphraseBytes, hGetSomeMnemonicInteractively)
 import Transaction
 import Prelude
-import GHC.Stack
-import Data.Maybe
-import Cardano.Mnemonic (mnemonicToText, entropyToMnemonic, genEntropy, mkMnemonic, MkSomeMnemonic (..), SomeMnemonic)
-import qualified Data.Text.IO as Text
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
-import System.IO.Extra (hGetPassphraseBytes, hGetSomeMnemonicInteractively)
-import System.IO
-import Options.Applicative.Style (PassphraseInputMode(..), PassphraseInfo (..), PassphraseInput (..))
-import Mnemonic.Generation
-import Control.Exception (throwIO)
-import Data.ByteString (ByteString)
-import Options.Applicative.MnemonicSize (MnemonicSize(..))
 
 main :: IO ()
 main = do
@@ -64,6 +73,14 @@ stateDir = do
   let fromXdg = getXdgDirectory XdgData "adawallet"
   maybe fromXdg pure fromEnv
 
+-- TODO get project ID from sql
+queryBFProjectId :: HasCallStack => IO String
+queryBFProjectId = do
+  envVar <- lookupEnv "ADAWALLET_BLOCKFROST_PROJ_ID"
+  case envVar of
+    Nothing -> error "no blockfrost project id set"
+    Just projid -> pure projid
+
 walletName :: IO String
 walletName = fromMaybe "default" <$> lookupEnv "ADAWALLET_NAME"
 
@@ -89,8 +106,8 @@ initialize = do
 restoreWallet :: String -> IO ()
 restoreWallet mmemonic = error "Not implemented yet"
 
-data MnemonicSource =
-    StdInput
+data MnemonicSource
+  = StdInput
   | Generate
 
 newtype Arg = Arg
@@ -108,11 +125,11 @@ createWallet arg = do
       hGetSomeMnemonicInteractively (stdin, stderr) Explicit prompt
     Generate -> do
       mnemonic <- createMnemonic MS_24
-      case mkSomeMnemonic @' [24] mnemonic of
+      case mkSomeMnemonic @'[24] mnemonic of
         Left err -> error $ show err
         Right a -> pure a
   passphrase <-
-      hGetPassphraseBytes (stdin, stderr) Explicit Interactive promptPass Utf8
+    hGetPassphraseBytes (stdin, stderr) Explicit Interactive promptPass Utf8
   insertMnemonicPassword someMnemonic passphrase
   where
     prompt = "Please enter a [9, 12, 15, 18, 21, 24] word mnemonic:"
@@ -144,4 +161,6 @@ bulkSignTx :: HasCallStack => FilePath -> Int -> [String] -> IO ()
 bulkSignTx fp account types = error "Not implemented yet"
 
 readTx :: HasCallStack => IO ()
-readTx = readBfTx
+readTx = do
+  bfProjId <- queryBFProjectId
+  readBfTx $ Text.pack bfProjId

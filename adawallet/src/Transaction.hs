@@ -2,33 +2,32 @@
 
 module Transaction where
 
-import qualified Blockfrost.Client   as BF
-import           Cardano.Api         as Api
-import           Cardano.Api.Shelley
-import           Data.Bifunctor
-import qualified Data.ByteString     as BS
-import qualified Data.Foldable       as Fld
-import qualified Data.Map.Strict     as Map
-import           Data.Maybe          (fromMaybe)
-import           Data.Monoid
-import           Data.String         (IsString (..))
-import           Data.Text           (Text)
-import qualified Data.Text           as T
-import qualified Data.Text           as Text
-import qualified Data.Text.Encoding  as TE
-import qualified Data.Text.Encoding  as Text
-import           GHC.Stack
-import           Money
-import           Numeric             (readHex)
-import           Prelude
-import           Text.Pretty.Simple
+import qualified Blockfrost.Auth as BF
+import qualified Blockfrost.Client as BF
+import Cardano.Api as Api
+import Cardano.Api.Shelley
+import Data.Bifunctor
+import qualified Data.ByteString as BS
+import qualified Data.Foldable as Fld
+import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe)
+import Data.Monoid
+import Data.String (IsString (..))
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Encoding as Text
+import GHC.Stack
+import Money
+import Numeric (readHex)
+import Text.Pretty.Simple
+import Prelude
 
-readBfTx :: HasCallStack => IO ()
-readBfTx = do
-  -- a token for preview network
-  -- BLOCKFROST_TOKEN_PATH="$PATH/adawallet/blockfrost.preview.token"
-  prj <- BF.projectFromEnv
+readBfTx :: HasCallStack => Text -> IO ()
+readBfTx projid = do
   let address = "addr_test1wqh4yha0ndhwykrh9cuhr47nh2y97zvkls74h4jq6uhlpacujv3z3"
+      prj = BF.mkProject projid
       -- TODO figure this out dynamically
       era = AlonzoEraOnwardsBabbage
   (latestBlocks, utxos) <- fmap (either (error . show) id) . BF.runBlockfrost prj $ do
