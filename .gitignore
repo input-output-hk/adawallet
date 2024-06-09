@@ -9,3 +9,4 @@ dist-profiled/
 dist/
 result*
 .direnv
+*.token

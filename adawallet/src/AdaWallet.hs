@@ -15,6 +15,9 @@ import System.Directory (
  )
 import System.Environment (lookupEnv)
 import Prelude
+import Transaction
+import GHC.Stack
+import Data.Maybe
 
 main :: IO ()
 main = do
@@ -28,30 +31,27 @@ opts =
         --        <> command "init-restore" (info (pure restoreWallet "foo") (progDesc "Restore a wallet from mnemonic"))
         <> command "init-create" (info (pure createWallet) (progDesc "create a wallet"))
         --        <> command "import-accounts" (info (pure importAccounts 0 0) (progDesc "create a wallet"))
+        <> command "debug-rtx" (info (pure readTx) (progDesc "read tx from blockfrost and print"))
     )
 
-wipeCommand :: IO ()
+wipeCommand :: HasCallStack => IO ()
 wipeCommand = do
   stateDir' <- stateDir
   walletName' <- walletName
   let sqliteFile = stateDir' ++ "/" ++ walletName' ++ ".sqlite"
   removePathForcibly sqliteFile
 
-stateDir :: IO FilePath
+stateDir :: HasCallStack => IO FilePath
 stateDir = do
   fromEnv <- lookupEnv "ADAWALLET_STATE"
   let fromXdg = getXdgDirectory XdgData "adawallet"
   maybe fromXdg pure fromEnv
 
 walletName :: IO String
-walletName = do
-  fromEnv <- lookupEnv "ADAWALLET_NAME"
-  case fromEnv of
-    Nothing -> pure "default"
-    Just name -> pure name
+walletName = fromMaybe "default" <$> lookupEnv "ADAWALLET_NAME"
 
 -- TODO: do more than just create tables
-initialize :: IO ()
+initialize :: HasCallStack => IO ()
 initialize = do
   stateDir' <- stateDir
   createDirectoryIfMissing True stateDir'
@@ -73,27 +73,30 @@ restoreWallet :: String -> IO ()
 restoreWallet mmemonic = putStrLn "Not implemented yet"
 
 -- Creates a new wallet, prints to stdout and loads the private key into sqlite
-createWallet :: IO ()
+createWallet :: HasCallStack => IO ()
 createWallet = putStrLn "Not implemented yet"
 
 -- Restores a wallet from an exported json file comtaining account data with no secrets
-restoreWalletReadOnly :: FilePath -> IO ()
+restoreWalletReadOnly :: HasCallStack => FilePath -> IO ()
 restoreWalletReadOnly json_file = putStrLn "Not implemented yet"
 
 -- Exports accounts to json without secret keys
-exportAccountsNoSecrets :: FilePath -> IO ()
+exportAccountsNoSecrets :: HasCallStack => FilePath -> IO ()
 exportAccountsNoSecrets json_file = putStrLn "Not implemented yet"
 
 -- Imports accounts for an already restored wallet (0th index for payment/stake/drep/CC cold/CC hot)
-importAccounts :: Int -> Int -> IO ()
+importAccounts :: HasCallStack => Int -> Int -> IO ()
 importAccounts start end = putStrLn "Not implemented yet"
 
 -- Signs transaction
 -- TODO replace [String] with list of custom types to sign with
-signTx :: FilePath -> Int -> [String] -> IO ()
+signTx :: HasCallStack => FilePath -> Int -> [String] -> IO ()
 signTx fp account types = putStrLn "Not implemented yet"
 
 -- Signs multiple transactions in a tarball
 -- TODO replace [String] with list of custom types to sign with
-bulkSignTx :: FilePath -> Int -> [String] -> IO ()
+bulkSignTx :: HasCallStack => FilePath -> Int -> [String] -> IO ()
 bulkSignTx fp account types = putStrLn "Not implemented yet"
+
+readTx :: HasCallStack => IO ()
+readTx = readBfTx

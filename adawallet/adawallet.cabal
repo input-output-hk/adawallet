@@ -45,12 +45,15 @@ library
   hs-source-dirs:       src
 
   exposed-modules:      AdaWallet
+                      , Transaction
 
   build-depends:        aeson             >= 1.5.6.0
                       , MissingH
+                      , blockfrost-api
+                      , blockfrost-client
                       , bytestring
                       , cardano-addresses
-                      , cardano-api ^>= 8.45.2
+                      , cardano-api ^>= 8.46
                       , cardano-cli ^>= 8.23
                       , cardano-prelude
                       , containers
@@ -60,6 +63,8 @@ library
                       , ouroboros-network-protocols
                       , parsec
                       , persistent-sqlite
+                      , pretty-simple
+                      , safe-money
                       , servant-client
                       , split
                       , stm
