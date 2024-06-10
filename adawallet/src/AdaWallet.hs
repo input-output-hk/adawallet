@@ -24,7 +24,6 @@ import qualified Data.Text.IO as Text
 import Database.Sqlite (open, prepare, stepConn)
 import GHC.Stack
 import Mnemonic.Conversion (mnemonicToRootExtendedPrivateKey)
-import Mnemonic.Generation
 import Mnemonic.Generation (createMnemonic)
 import Options.Applicative (
   Parser,
@@ -55,12 +54,50 @@ import System.IO.Extra (hGetPassphraseBytes, hGetSomeMnemonicInteractively)
 import Transaction
 import Prelude
 
+-- walletState passed to all commands that need it
+data Account = Account
+  { accountIndex :: Int
+  , accountSkey :: ByteString
+  , accountVkey :: ByteString
+  , paymentSkey :: ByteString
+  , paymentVkey :: ByteString
+  , stakeSkey :: ByteString
+  , stakeVkey :: ByteString
+  , drepSkey :: ByteString
+  , drepVkey :: ByteString
+  , ccColdSkey :: ByteString
+  , ccColdVkey :: ByteString
+  , ccHotSkey :: ByteString
+  , ccHotVkey :: ByteString
+  , address :: String
+  , stakeAddress :: String
+  }
+  deriving (Show, Read, Eq)
+
 data WalletState = WalletState
   { rootXprv :: ByteString
-  , accounts :: [(ByteString, ByteString, ByteString, ByteString, ByteString)]
+  , accounts :: [Account]
   , blockFrostProjectId :: String
   , isTestnet :: Bool
   }
+  deriving (Show, Read, Eq)
+
+-- sqlite table structures
+data StateTable = StateTable
+  { version :: Int
+  , root_key :: ByteString
+  , root_key_pw :: ByteString
+  , testnet :: Bool
+  , blockfrost_project_id :: String
+  }
+  deriving (Show, Read, Eq)
+
+data AccountTable = AccountTable
+  { id :: Int
+  , index :: Int
+  , vkey :: ByteString
+  }
+  deriving (Show, Read, Eq)
 
 -- TODO query from database
 queryWalletState :: IO WalletState
@@ -122,7 +159,7 @@ initialize = do
   let queries =
         map
           (prepare conn)
-          [ "CREATE TABLE IF NOT EXISTS status(hw_wallet,root_key,testnet,blockfrost_url);"
+          [ "CREATE TABLE IF NOT EXISTS state(version,root_key,root_key_pw,testnet,blockfrost_project_id);"
           , "CREATE TABLE IF NOT EXISTS utxo(txid,tx_index,address,amount);"
           , "CREATE TABLE IF NOT EXISTS accounts(id,payment_vkey,payment_skey,stake_vkey,stake_skey,address,stake_address);"
           ]
