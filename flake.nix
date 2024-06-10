@@ -70,7 +70,7 @@
               haskell-language-server = "2.8.0.0";
             };
           # and from nixpkgs or other inputs
-          shell.nativeBuildInputs = with nixpkgs; [ gh jq yq-go ];
+          shell.nativeBuildInputs = with nixpkgs; [gh jq yq-go];
           # disable Hoogle until someone request it
           shell.withHoogle = false;
           # Skip cross compilers for the shell
@@ -81,10 +81,8 @@
           modules = [
             ({pkgs, ...}: {
               packages.adawallet.configureFlags = ["--ghc-option=-Werror"];
-              packages.adawallet.components.tests.adawallet-test.build-tools =
-                with pkgs.buildPackages; [ jq coreutils shellcheck ];
-              packages.adawallet.components.tests.adawallet-golden.build-tools =
-                with pkgs.buildPackages; [ jq coreutils shellcheck ];
+              packages.adawallet.components.tests.adawallet-test.build-tools = with pkgs.buildPackages; [jq coreutils shellcheck];
+              packages.adawallet.components.tests.adawallet-golden.build-tools = with pkgs.buildPackages; [jq coreutils shellcheck];
             })
             ({
               pkgs,
@@ -121,9 +119,9 @@
               '';
             })
             {
-               packages.crypton-x509-system.postPatch = ''
-                  substituteInPlace crypton-x509-system.cabal --replace 'Crypt32' 'crypt32'
-               '';
+              packages.crypton-x509-system.postPatch = ''
+                substituteInPlace crypton-x509-system.cabal --replace 'Crypt32' 'crypt32'
+              '';
             }
           ];
         });
@@ -154,9 +152,13 @@
             inherit cabalProject nixpkgs;
             # also provide hydraJobs through legacyPackages to allow building without system prefix:
             inherit hydraJobs;
-            # expose adawallet binary at top-level
-            adawallet = cabalProject.hsPkgs.adawallet.components.exes.adawallet;
           };
+
+          packages = rec {
+            inherit (cabalProject.hsPkgs.adawallet.components.exes) adawallet;
+            default = adawallet;
+          };
+
           devShells = let
             profillingShell = p: {
               # `nix develop .#profiling` (or `.#ghc927.profiling): a shell with profiling enabled

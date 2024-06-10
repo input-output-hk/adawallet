@@ -26,7 +26,17 @@ import GHC.Stack
 import Mnemonic.Conversion (mnemonicToRootExtendedPrivateKey)
 import Mnemonic.Generation
 import Mnemonic.Generation (createMnemonic)
-import Options.Applicative (Parser, command, execParser, hsubparser, idm, info, progDesc)
+import Options.Applicative (
+  Parser,
+  command,
+  execParser,
+  helper,
+  hsubparser,
+  idm,
+  info,
+  progDesc,
+  (<**>),
+ )
 import Options.Applicative.MnemonicSize (MnemonicSize (..))
 import Options.Applicative.Style (
   PassphraseInfo (..),
@@ -48,7 +58,7 @@ import Prelude
 main :: IO ()
 main = do
   initialize
-  join $ execParser (info opts idm)
+  join $ execParser $ info (opts <**> helper) idm
 
 opts :: Parser (IO ())
 opts =
