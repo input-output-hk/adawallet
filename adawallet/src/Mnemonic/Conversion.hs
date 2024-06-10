@@ -10,11 +10,11 @@ module Mnemonic.Conversion where
 import Prelude
 
 import Cardano.Address.Derivation
+import qualified Cardano.Address.Style.Shelley as Shelley
+import Cardano.Api (StakeKey)
 import qualified Cardano.Codec.Bech32.Prefixes as CIP5
 import Cardano.Mnemonic
-import Data.Coerce
 import Codec.Binary.Bech32 hiding (encode)
-import qualified Cardano.Address.Style.Shelley as Shelley
 import qualified Codec.Binary.Bech32 as Bech32
 import Codec.Binary.Encoding
 import Control.Exception
@@ -23,6 +23,7 @@ import Control.Monad.Trans.Except.Extra
 import Control.Monad.Trans.Fail
 import Data.Bifunctor
 import Data.ByteString (ByteString)
+import Data.Coerce
 import Data.Functor.Identity
 import Data.Text (Text)
 import qualified Data.Text.Encoding as Text
@@ -30,23 +31,24 @@ import GHC.TypeLits
 import GHC.Word
 import Options.Applicative.Derivation
 import Options.Applicative.Style
-import Cardano.Api (StakeKey)
 
 data RootExtendedKeyGenerationError
   = MnemonicError (MkSomeMnemonicError '[24])
   | RootKeyGenerationError IOException
+  deriving (Show, Eq)
+
+-- Takes an xprv and a maybe passphrase. if nothing, return xprv, otherwise return decrypted xprv using passphrase
+decryptRootExtendedPrivateKey ::
+  ByteString -> Maybe Passphrase -> IO (Either RootExtendedKeyGenerationError ByteString)
+decryptRootExtendedPrivateKey rootK password = undefined
 
 mnemonicToRootExtendedPrivateKey ::
-  [Text] -> IO (Either RootExtendedKeyGenerationError ByteString)
-mnemonicToRootExtendedPrivateKey mnemonic = runExceptT $ do
+  SomeMnemonic -> Maybe Passphrase -> IO (Either RootExtendedKeyGenerationError ByteString)
+mnemonicToRootExtendedPrivateKey someMnemonic password = runExceptT $ do
   -- TODO: Support password protected mnemonics
   -- TODO: Potentially support Byron, Icarus and Shared mnemonics
   -- TODO: Potentially support other sizes of mnemonics (9, 12, 15, 18, 21)
-  let password = Nothing
-      style = Shelley
-  someMnemonic <-
-    hoistEither . first MnemonicError $
-      mkSomeMnemonic mnemonic
+  let style = Shelley
   rootK <-
     handleIOExceptT RootKeyGenerationError $
       generateRootKey someMnemonic password style
@@ -66,18 +68,18 @@ data PrivateExtendedKeyError
   | AccountKeyIndexError Word32
   | StakeKeyIndexGenerationError Word32
 
-newtype PaymentPrivateKey = PaymentPrivateKey ByteString 
+newtype PaymentPrivateKey = PaymentPrivateKey ByteString
 newtype StakePrivateKey = StakePrivateKey ByteString
 
-data AdaWalletKeyPair = 
-  AdaWalletKeyPair 
-    { awkpPaymentPrivateKey :: PaymentPrivateKey
-    , awkpStakePrivateKey :: StakePrivateKey
-    }
+data AdaWalletKeyPair = AdaWalletKeyPair
+  { awkpPaymentPrivateKey :: PaymentPrivateKey
+  , awkpStakePrivateKey :: StakePrivateKey
+  }
 
 -- | Convert the root extended private key to an extended private key.
 -- https://github.com/uniVocity/cardano-tutorials/blob/master/cardano-addresses.md#understanding-the-hd-wallet-address-format-bip-44
-rootExtendedPrivateKeyToAdaWalletKeyPair :: ByteString -> Either PrivateExtendedKeyError AdaWalletKeyPair
+rootExtendedPrivateKeyToAdaWalletKeyPair ::
+  ByteString -> Either PrivateExtendedKeyError AdaWalletKeyPair
 rootExtendedPrivateKeyToAdaWalletKeyPair rootExtendedPrivateKeyBytes = do
   (hrp, dataPart) <-
     first Bech32DecodeError . Bech32.decodeLenient $
@@ -85,15 +87,15 @@ rootExtendedPrivateKeyToAdaWalletKeyPair rootExtendedPrivateKeyBytes = do
   bytes <- maybe (Left DataPartDecodeError) Right $ Bech32.dataPartToBytes dataPart
   xprv <- maybe (Left $ XPrvDecodeError bytes) Right $ xprvFromBytes bytes
 
-  -- Derive the account key 
+  -- Derive the account key
   -- More info: -- https://cips.cardano.org/cip/CIP-1852
   let accountKeyIndex = 0
-  accountKeyIndex' :: Index Hardened AccountK 
-    <- maybe (Left $ AccountKeyIndexError accountKeyIndex) Right 
-         $ indexFromWord32 accountKeyIndex
+  accountKeyIndex' :: Index Hardened AccountK <-
+    maybe (Left $ AccountKeyIndexError accountKeyIndex) Right $
+      indexFromWord32 accountKeyIndex
   let accountKey = deriveAccountPrivateKey (Shelley.genMasterKeyFromXPrv xprv) accountKeyIndex'
 
-  -- Derive the payment private key 
+  -- Derive the payment private key
   let paymentPrivateKey = deriveAddressPrivateKey accountKey Shelley.UTxOExternal $ coerce accountKeyIndex' -- Shortcut to get the 0th index
   (paymentHrp, paymentChild) <-
     (,xprvToBytes $ Shelley.getKey paymentPrivateKey)
@@ -103,13 +105,14 @@ rootExtendedPrivateKeyToAdaWalletKeyPair rootExtendedPrivateKeyBytes = do
   let stakePrivateKey = Shelley.deriveDelegationPrivateKey accountKey
       stakeKeyIndex = 2
   (stakeHrp, stakeChild) <-
-      (,xprvToBytes $ Shelley.getKey stakePrivateKey)
+    (,xprvToBytes $ Shelley.getKey stakePrivateKey)
       <$> first ChildKeyBech32HumuanReadablePartError (runFail $ childHrpFor [stakeKeyIndex] hrp)
 
-  return $ AdaWalletKeyPair
-    { awkpPaymentPrivateKey = PaymentPrivateKey $ encode (EBech32 paymentHrp) paymentChild
-    , awkpStakePrivateKey = StakePrivateKey $ encode (EBech32 stakeHrp) stakeChild
-    } 
+  return $
+    AdaWalletKeyPair
+      { awkpPaymentPrivateKey = PaymentPrivateKey $ encode (EBech32 paymentHrp) paymentChild
+      , awkpStakePrivateKey = StakePrivateKey $ encode (EBech32 stakeHrp) stakeChild
+      }
   where
     -- NB: We wholesale copy this from cardano-address
     -- As a reminder, we really have two scenarios:

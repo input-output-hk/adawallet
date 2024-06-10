@@ -15,6 +15,7 @@ import Cardano.Mnemonic (
 import Control.Exception (throwIO)
 import Control.Monad (forM_, join)
 import Data.ByteString (ByteString)
+import Data.ByteString.Char8 (unpack)
 import Data.Foldable (traverse_)
 import Data.Maybe
 import qualified Data.Text as T
@@ -46,6 +47,7 @@ import Options.Applicative (
  )
 import Options.Applicative.MnemonicSize (MnemonicSize (..))
 import Options.Applicative.Style (
+  Passphrase (..),
   PassphraseInfo (..),
   PassphraseInput (..),
   PassphraseInputMode (..),
@@ -228,13 +230,23 @@ createWallet source = do
         Right a -> pure a
   passphrase <-
     hGetPassphraseBytes (stdin, stderr) Explicit Interactive promptPass Utf8
-  insertMnemonicPassword someMnemonic passphrase
+  putStrLn $ unpack passphrase
+  insertMnemonicPassword someMnemonic $ maybePassphrase passphrase
   where
+    maybePassphrase :: ByteString -> Maybe ByteString
+    maybePassphrase "" = Nothing
+    maybePassphrase p = Just p
+
     prompt = "Please enter a [9, 12, 15, 18, 21, 24] word mnemonic:"
     promptPass = "Enter passphrase (empty for no passphrase):"
 
-insertMnemonicPassword :: SomeMnemonic -> ByteString -> IO ()
-insertMnemonicPassword = error "unimplemented"
+insertMnemonicPassword :: SomeMnemonic -> Maybe ByteString -> IO ()
+insertMnemonicPassword mnemonic password = do
+  let passphrase = fmap FromEncoded password
+  xprv <- mnemonicToRootExtendedPrivateKey mnemonic passphrase
+  case xprv of
+    Left e -> error $ "problem occurred: " ++ show e
+    Right xprv -> putStrLn $ unpack xprv
 
 -- Restores a wallet from an exported json file comtaining account data with no secrets
 restoreWalletReadOnly :: HasCallStack => FilePath -> IO ()
