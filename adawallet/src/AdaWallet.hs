@@ -55,19 +55,35 @@ import System.IO.Extra (hGetPassphraseBytes, hGetSomeMnemonicInteractively)
 import Transaction
 import Prelude
 
+data WalletState = WalletState
+  { rootXprv :: ByteString
+  , accounts :: [(ByteString, ByteString, ByteString, ByteString, ByteString)]
+  , blockFrostProjectId :: String
+  , isTestnet :: Bool
+  }
+
+-- TODO query from database
+queryWalletState :: IO WalletState
+queryWalletState = do
+  bfProjectId <- queryBFProjectId
+  pure $ WalletState "" [] bfProjectId True
+
 main :: IO ()
 main = do
   initialize
-  join $ execParser $ info (opts <**> helper) idm
+  walletState <- queryWalletState
+  join $ execParser $ info (opts walletState <**> helper) idm
 
-opts :: Parser (IO ())
-opts =
+opts :: WalletState -> Parser (IO ())
+opts walletState =
   hsubparser
     ( command "wipe" (info (pure wipeCommand) (progDesc "wipe all state"))
         --        <> command "init-restore" (info (pure restoreWallet "foo") (progDesc "Restore a wallet from mnemonic"))
         <> command "init-create" (info (pure (createWallet defaultArgs)) (progDesc "create a wallet"))
         --        <> command "import-accounts" (info (pure importAccounts 0 0) (progDesc "create a wallet"))
-        <> command "debug-rtx" (info (pure readTx) (progDesc "read tx from blockfrost and print"))
+        <> command
+          "debug-rtx"
+          (info (pure $ readTx walletState) (progDesc "read tx from blockfrost and print"))
     )
 
 wipeCommand :: HasCallStack => IO ()
@@ -170,7 +186,7 @@ signTx fp account types = error "Not implemented yet"
 bulkSignTx :: HasCallStack => FilePath -> Int -> [String] -> IO ()
 bulkSignTx fp account types = error "Not implemented yet"
 
-readTx :: HasCallStack => IO ()
-readTx = do
-  bfProjId <- queryBFProjectId
+readTx :: HasCallStack => WalletState -> IO ()
+readTx walletState = do
+  let bfProjId = blockFrostProjectId walletState
   readBfTx $ Text.pack bfProjId
