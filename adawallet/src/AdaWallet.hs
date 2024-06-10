@@ -27,13 +27,21 @@ import Mnemonic.Conversion (mnemonicToRootExtendedPrivateKey)
 import Mnemonic.Generation (createMnemonic)
 import Options.Applicative (
   Parser,
+  argument,
   command,
   execParser,
+  flag,
+  fullDesc,
+  header,
+  help,
   helper,
   hsubparser,
   idm,
   info,
+  long,
   progDesc,
+  short,
+  str,
   (<**>),
  )
 import Options.Applicative.MnemonicSize (MnemonicSize (..))
@@ -108,19 +116,38 @@ queryWalletState = do
 main :: IO ()
 main = do
   initialize
-  walletState <- queryWalletState
-  join $ execParser $ info (opts walletState <**> helper) idm
+  cmd <-
+    execParser $
+      info
+        (opts <**> helper)
+        ( fullDesc
+            <> progDesc "Print a greeting for TARGET"
+            <> header "hello - a test for optparse-applicative"
+        )
+  case cmd of
+    CommandWipe -> wipeCommand
+    CommandCreateWallet options -> createWallet options
+    CommandDebugRTX -> do
+      walletState <- queryWalletState
+      readTx walletState
 
-opts :: WalletState -> Parser (IO ())
-opts walletState =
+data Command
+  = CommandWipe
+  | CommandCreateWallet CreateWalletOptions
+  | CommandDebugRTX
+
+opts :: Parser Command
+opts =
   hsubparser
-    ( command "wipe" (info (pure wipeCommand) (progDesc "wipe all state"))
+    ( command "wipe" (info (pure CommandWipe) (progDesc "wipe all state"))
         --        <> command "init-restore" (info (pure restoreWallet "foo") (progDesc "Restore a wallet from mnemonic"))
-        <> command "init-create" (info (pure (createWallet defaultArgs)) (progDesc "create a wallet"))
+        <> command
+          "init-create"
+          (info (CommandCreateWallet <$> createWalletOptions) (progDesc "create a wallet"))
         --        <> command "import-accounts" (info (pure importAccounts 0 0) (progDesc "create a wallet"))
         <> command
           "debug-rtx"
-          (info (pure $ readTx walletState) (progDesc "read tx from blockfrost and print"))
+          (info (pure CommandDebugRTX) (progDesc "read tx from blockfrost and print"))
     )
 
 wipeCommand :: HasCallStack => IO ()
@@ -173,17 +200,25 @@ data MnemonicSource
   = StdInput
   | Generate
 
-newtype Arg = Arg
-  { source :: MnemonicSource -- Nothing to create
+newtype CreateWalletOptions = CreateWalletOptions
+  { generate :: MnemonicSource
   }
 
-defaultArgs :: Arg
-defaultArgs = Arg StdInput
+createWalletOptions :: Parser CreateWalletOptions
+createWalletOptions =
+  CreateWalletOptions
+    <$> flag
+      StdInput
+      Generate
+      ( long "generate"
+          <> short 'g'
+          <> help "Enable Mnemonic generation"
+      )
 
 -- Creates a new wallet, prints to stdout and loads the private key into sqlite
-createWallet :: HasCallStack => Arg -> IO ()
-createWallet arg = do
-  someMnemonic <- case source arg of
+createWallet :: HasCallStack => CreateWalletOptions -> IO ()
+createWallet source = do
+  someMnemonic <- case generate source of
     StdInput -> do
       hGetSomeMnemonicInteractively (stdin, stderr) Explicit prompt
     Generate -> do
