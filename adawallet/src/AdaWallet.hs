@@ -6,7 +6,7 @@ module AdaWallet (main) where
 
 import Cardano.Mnemonic (
   MkSomeMnemonic (..),
-  SomeMnemonic,
+  SomeMnemonic (..),
   entropyToMnemonic,
   genEntropy,
   mkMnemonic,
@@ -22,7 +22,7 @@ import qualified Data.Text as T
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
-import Database.Sqlite (open, prepare, stepConn)
+import Database.Sqlite (finalize, open, prepare, stepConn)
 import GHC.Stack
 import Mnemonic.Conversion (mnemonicToRootExtendedPrivateKey)
 import Mnemonic.Generation (createMnemonic)
@@ -43,6 +43,8 @@ import Options.Applicative (
   progDesc,
   short,
   str,
+  strOption,
+  switch,
   (<**>),
  )
 import Options.Applicative.MnemonicSize (MnemonicSize (..))
@@ -96,16 +98,16 @@ data WalletState = WalletState
 data StateTable = StateTable
   { version :: Int
   , root_key :: ByteString
-  , root_key_pw :: ByteString
-  , testnet :: Bool
+  , is_encrypted :: Bool
+  , is_testnet :: Bool
   , blockfrost_project_id :: String
   }
   deriving (Show, Read, Eq)
 
 data AccountTable = AccountTable
-  { id :: Int
-  , index :: Int
+  { idx :: Int
   , vkey :: ByteString
+  , name :: Maybe String
   }
   deriving (Show, Read, Eq)
 
@@ -188,11 +190,13 @@ initialize = do
   let queries =
         map
           (prepare conn)
-          [ "CREATE TABLE IF NOT EXISTS state(version,root_key,root_key_pw,testnet,blockfrost_project_id);"
-          , "CREATE TABLE IF NOT EXISTS utxo(txid,tx_index,address,amount);"
-          , "CREATE TABLE IF NOT EXISTS accounts(id,payment_vkey,payment_skey,stake_vkey,stake_skey,address,stake_address);"
+          [ "CREATE TABLE IF NOT EXISTS state(version INT,root_key TEXT,is_encrypted INT,is_testnet INT,blockfrost_project_id TEXT) STRICT;"
+          , "CREATE TABLE IF NOT EXISTS account(idx INTEGER PRIMARY KEY,vkey TEXT NOT NULL,name TEXT) STRICT;"
+          , -- Not used yet
+            "CREATE TABLE IF NOT EXISTS utxo(txid,tx_index,address,amount);"
           ]
   forM_ queries (>>= stepConn conn)
+  forM_ queries (>>= finalize)
 
 -- Restores a wallet from a mnemonic and loads the private key into sqlite
 restoreWallet :: String -> IO ()
@@ -202,8 +206,10 @@ data MnemonicSource
   = StdInput
   | Generate
 
-newtype CreateWalletOptions = CreateWalletOptions
+data CreateWalletOptions = CreateWalletOptions
   { generate :: MnemonicSource
+  , isTestnetA :: Bool
+  , blockFrostProjectIdA :: String
   }
 
 createWalletOptions :: Parser CreateWalletOptions
@@ -216,6 +222,16 @@ createWalletOptions =
           <> short 'g'
           <> help "Enable Mnemonic generation"
       )
+    <*> switch
+      ( long "testnet"
+          <> short 't'
+          <> help "Specify if testnet environment"
+      )
+    <*> strOption
+      ( long "blockfrost-project-id"
+          <> short 'b'
+          <> help "Blockfrost Project ID"
+      )
 
 -- Creates a new wallet, prints to stdout and loads the private key into sqlite
 createWallet :: HasCallStack => CreateWalletOptions -> IO ()
@@ -227,26 +243,36 @@ createWallet source = do
       mnemonic <- createMnemonic MS_24
       case mkSomeMnemonic @'[24] mnemonic of
         Left err -> error $ show err
-        Right a -> pure a
+        Right v@(SomeMnemonic a) -> do
+          let words = mnemonicToText a
+              wordsString = unwords (map Text.unpack words)
+          print $ "Your mnemonic is: " ++ wordsString
+          pure v
+  let projectId = blockFrostProjectIdA source
+      testnet = isTestnetA source
   passphrase <-
     hGetPassphraseBytes (stdin, stderr) Explicit Interactive promptPass Utf8
+
   putStrLn $ unpack passphrase
-  insertMnemonicPassword someMnemonic $ maybePassphrase passphrase
+
+  root_key <- mnemonicToRootExtendedPrivateKey someMnemonic (maybePassphrase passphrase)
+  case root_key of
+    Left e -> error $ "problem occurred: " ++ show e
+    Right xprv -> do
+      let isEncrypted = passphrase /= ""
+          stateTable = StateTable 1 xprv isEncrypted testnet projectId
+      insertState stateTable
   where
-    maybePassphrase :: ByteString -> Maybe ByteString
+    maybePassphrase :: ByteString -> Maybe Passphrase
     maybePassphrase "" = Nothing
-    maybePassphrase p = Just p
+    maybePassphrase p = Just $ FromEncoded p
 
     prompt = "Please enter a [9, 12, 15, 18, 21, 24] word mnemonic:"
     promptPass = "Enter passphrase (empty for no passphrase):"
 
-insertMnemonicPassword :: SomeMnemonic -> Maybe ByteString -> IO ()
-insertMnemonicPassword mnemonic password = do
-  let passphrase = fmap FromEncoded password
-  xprv <- mnemonicToRootExtendedPrivateKey mnemonic passphrase
-  case xprv of
-    Left e -> error $ "problem occurred: " ++ show e
-    Right xprv -> putStrLn $ unpack xprv
+insertState :: StateTable -> IO ()
+insertState stateTable = do
+  print stateTable
 
 -- Restores a wallet from an exported json file comtaining account data with no secrets
 restoreWalletReadOnly :: HasCallStack => FilePath -> IO ()
