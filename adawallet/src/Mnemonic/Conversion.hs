@@ -12,7 +12,9 @@ import Prelude
 import Cardano.Address.Derivation
 import qualified Cardano.Codec.Bech32.Prefixes as CIP5
 import Cardano.Mnemonic
+import Data.Coerce
 import Codec.Binary.Bech32 hiding (encode)
+import qualified Cardano.Address.Style.Shelley as Shelley
 import qualified Codec.Binary.Bech32 as Bech32
 import Codec.Binary.Encoding
 import Control.Exception
@@ -28,6 +30,7 @@ import GHC.TypeLits
 import GHC.Word
 import Options.Applicative.Derivation
 import Options.Applicative.Style
+import Cardano.Api (StakeKey)
 
 data RootExtendedKeyGenerationError
   = MnemonicError (MkSomeMnemonicError '[24])
@@ -60,29 +63,53 @@ data PrivateExtendedKeyError
   | DerivationPathError String
   | XPrvDecodeError ByteString
   | ChildKeyBech32HumuanReadablePartError String
+  | AccountKeyIndexError Word32
+  | StakeKeyIndexGenerationError Word32
+
+newtype PaymentPrivateKey = PaymentPrivateKey ByteString 
+newtype StakePrivateKey = StakePrivateKey ByteString
+
+data AdaWalletKeyPair = 
+  AdaWalletKeyPair 
+    { awkpPaymentPrivateKey :: PaymentPrivateKey
+    , awkpStakePrivateKey :: StakePrivateKey
+    }
 
 -- | Convert the root extended private key to an extended private key.
 -- https://github.com/uniVocity/cardano-tutorials/blob/master/cardano-addresses.md#understanding-the-hd-wallet-address-format-bip-44
-rootExtendedPrivateKeyToPrivateKey :: ByteString -> Either PrivateExtendedKeyError ByteString
-rootExtendedPrivateKeyToPrivateKey rootExtendedPrivateKeyBytes = do
+rootExtendedPrivateKeyToAdaWalletKeyPair :: ByteString -> Either PrivateExtendedKeyError AdaWalletKeyPair
+rootExtendedPrivateKeyToAdaWalletKeyPair rootExtendedPrivateKeyBytes = do
   (hrp, dataPart) <-
     first Bech32DecodeError . Bech32.decodeLenient $
       Text.decodeUtf8 rootExtendedPrivateKeyBytes
   bytes <- maybe (Left DataPartDecodeError) Right $ Bech32.dataPartToBytes dataPart
   xprv <- maybe (Left $ XPrvDecodeError bytes) Right $ xprvFromBytes bytes
-  let defaultDerivationPath = "1852H/1815H/0H/0/0"
-  derivPath <- first DerivationPathError $ derivationPathFromString defaultDerivationPath
 
-  let ixs = castDerivationPath derivPath
-      scheme =
-        if length ixs == 2 && hrp == CIP5.root_xsk
-          then DerivationScheme1
-          else DerivationScheme2
-  let Identity child = foldM (\k -> pure . deriveXPrv scheme k) xprv ixs
-  (hrp, child) <-
-    (,xprvToBytes child)
-      <$> first ChildKeyBech32HumuanReadablePartError (runFail $ childHrpFor (indexToWord32 <$> ixs) hrp)
-  return $ encode (EBech32 hrp) child
+  -- Derive the account key 
+  -- More info: -- https://cips.cardano.org/cip/CIP-1852
+  let accountKeyIndex = 0
+  accountKeyIndex' :: Index Hardened AccountK 
+    <- maybe (Left $ AccountKeyIndexError accountKeyIndex) Right 
+         $ indexFromWord32 accountKeyIndex
+  let accountKey = deriveAccountPrivateKey (Shelley.genMasterKeyFromXPrv xprv) accountKeyIndex'
+
+  -- Derive the payment private key 
+  let paymentPrivateKey = deriveAddressPrivateKey accountKey Shelley.UTxOExternal $ coerce accountKeyIndex' -- Shortcut to get the 0th index
+  (paymentHrp, paymentChild) <-
+    (,xprvToBytes $ Shelley.getKey paymentPrivateKey)
+      <$> first ChildKeyBech32HumuanReadablePartError (runFail $ childHrpFor [accountKeyIndex] hrp)
+
+  -- Derive the stake private key
+  let stakePrivateKey = Shelley.deriveDelegationPrivateKey accountKey
+      stakeKeyIndex = 2
+  (stakeHrp, stakeChild) <-
+      (,xprvToBytes $ Shelley.getKey stakePrivateKey)
+      <$> first ChildKeyBech32HumuanReadablePartError (runFail $ childHrpFor [stakeKeyIndex] hrp)
+
+  return $ AdaWalletKeyPair
+    { awkpPaymentPrivateKey = PaymentPrivateKey $ encode (EBech32 paymentHrp) paymentChild
+    , awkpStakePrivateKey = StakePrivateKey $ encode (EBech32 stakeHrp) stakeChild
+    } 
   where
     -- NB: We wholesale copy this from cardano-address
     -- As a reminder, we really have two scenarios:
