@@ -14,18 +14,18 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module DB.Schema where
-import Data.Text (Text)
+
 import Data.ByteString (ByteString)
+import Data.Text (Text)
 import Database.Persist.TH
 import Prelude
-import Data.ByteString
 
 share
-    [ mkPersist sqlSettings
-    , mkMigrate "migrateAll"
-    , mkEntityDefList "entityDefs"
-    ]
-    [persistLowerCase|
+  [ mkPersist sqlSettings
+  , mkMigrate "migrateAll"
+  , mkEntityDefList "entityDefs"
+  ]
+  [persistLowerCase|
 
     State
       version        Int
@@ -36,13 +36,13 @@ share
 
     Utxo
       txid          ByteString
-      tx_index      ByteString
+      tx_index      Int
       address       ByteString
-      amount        ByteString
+      amount        Int
 
     Account
       idx               Int
-      vkey              Text
+      vkey              ByteString
       name              Text
       Primary idx
    |]

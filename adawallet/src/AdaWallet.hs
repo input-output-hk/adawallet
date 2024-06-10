@@ -202,11 +202,15 @@ opts =
         <> command "sign" (info (pure CommandSign) (progDesc "sign a tx"))
     )
 
-wipeCommand :: HasCallStack => IO ()
-wipeCommand = do
+sqliteFilePath :: HasCallStack => IO FilePath
+sqliteFilePath = do
   stateDir' <- stateDir
   walletName' <- walletName
-  let sqliteFile = stateDir' ++ "/" ++ walletName' ++ ".sqlite"
+  pure $ stateDir' ++ "/" ++ walletName' ++ ".sqlite"
+
+wipeCommand :: HasCallStack => IO ()
+wipeCommand = do
+  sqliteFile <- sqliteFilePath
   removePathForcibly sqliteFile
 
 stateDir :: HasCallStack => IO FilePath
@@ -240,16 +244,16 @@ initialize = do
   stateDir' <- stateDir
   createDirectoryIfMissing True stateDir'
   walletName' <- walletName
-  let sqliteFile = stateDir' ++ "/" ++ walletName' ++ ".sqlite"
+  sqliteFile <- sqliteFilePath
   conn <- open $ T.pack sqliteFile
 
   let queries =
         map
           (prepare conn)
-          [ "CREATE TABLE IF NOT EXISTS state(version INT,root_key TEXT,is_encrypted INT,is_testnet INT,blockfrost_project_id TEXT) STRICT;"
-          , "CREATE TABLE IF NOT EXISTS account(idx INTEGER PRIMARY KEY,vkey TEXT NOT NULL,name TEXT) STRICT;"
+          [ "CREATE TABLE IF NOT EXISTS state(id INT PRIMARY KEY,version INT,root_key BLOB,is_encrypted INT,is_testnet INT,blockfrost_project_id TEXT) STRICT;"
+          , "CREATE TABLE IF NOT EXISTS account(id INT PRIMARY KEY,idx INTEGER UNIQUE,vkey BLOB NOT NULL,name TEXT) STRICT;"
           , -- Not used yet
-            "CREATE TABLE IF NOT EXISTS utxo(txid,tx_index,address,amount);"
+            "CREATE TABLE IF NOT EXISTS utxo(id INT PRIMARY KEY,txid,tx_index,address,amount);"
           ]
   forM_ queries (>>= stepConn conn)
   forM_ queries (>>= finalize)
@@ -317,7 +321,8 @@ createWallet source = do
     Right xprv -> do
       let isEncrypted = passphrase /= ""
           stateTable = DB.State 1 xprv isEncrypted testnet (T.pack projectId)
-      void $ withConnectionDebug $ insertState stateTable
+      fp <- sqliteFilePath
+      void $ withConnectionDebug fp (insertState stateTable)
   where
     maybePassphrase :: ByteString -> Maybe Passphrase
     maybePassphrase "" = Nothing
