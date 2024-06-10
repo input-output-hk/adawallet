@@ -18,17 +18,16 @@ import Control.Exception (throwIO)
 import Control.Monad (forM_, join)
 import Data.Bifunctor
 import Data.ByteString (ByteString)
-import Data.ByteString.Char8 (unpack)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as Base16
+import Data.ByteString.Char8 (unpack)
 import Data.Foldable (traverse_)
 import Data.Maybe
 import Data.String (IsString (..))
 import Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text as Text
-import qualified Data.Text.Encoding as Text
-import qualified Data.Text.IO as Text
+import qualified Data.Text.Encoding as T
+import qualified Data.Text.IO as T
 import Database.Sqlite (finalize, open, prepare, stepConn)
 import GHC.Stack
 import Mnemonic.Conversion (mnemonicToRootExtendedPrivateKey)
@@ -84,17 +83,17 @@ currentEra = ShelleyBasedEraBabbage
 -- walletState passed to all commands that need it
 data Account = Account
   { accountIndex :: Int
-  , accountSkey :: ByteString
+  , accountSkey :: Maybe ByteString
   , accountVkey :: ByteString
-  , paymentSkey :: ByteString
+  , paymentSkey :: Maybe ByteString
   , paymentVkey :: ByteString
-  , stakeSkey :: ByteString
+  , stakeSkey :: Maybe ByteString
   , stakeVkey :: ByteString
-  , drepSkey :: ByteString
+  , drepSkey :: Maybe ByteString
   , drepVkey :: ByteString
-  , ccColdSkey :: ByteString
+  , ccColdSkey :: Maybe ByteString
   , ccColdVkey :: ByteString
-  , ccHotSkey :: ByteString
+  , ccHotSkey :: Maybe ByteString
   , ccHotVkey :: ByteString
   , address :: String
   , stakeAddress :: String
@@ -103,6 +102,7 @@ data Account = Account
 
 data WalletState = WalletState
   { rootXprv :: ByteString
+  , rootXprvEncrypted :: Bool
   , accounts :: [Account]
   , blockFrostProjectId :: String
   , isTestnet :: Bool
@@ -130,7 +130,28 @@ data AccountTable = AccountTable
 queryWalletState :: IO WalletState
 queryWalletState = do
   bfProjectId <- queryBFProjectId
-  pure $ WalletState "" [] bfProjectId True
+  rootKey <- queryRootKey
+
+  let acct =
+        Account
+          0
+          Nothing
+          "acct_xvk1jk900g6aj69l6yx24ug7cdc2ax7cxesrg2synxaevj2j9mlmtysp9jc6j3pezn7y9zkegfdv0lfyln9wdw7zsu64wj0l04k99ugktlgvnx703"
+          Nothing
+          ""
+          Nothing
+          ""
+          Nothing
+          ""
+          Nothing
+          ""
+          Nothing
+          ""
+          ""
+          ""
+      accounts = [acct]
+
+  pure $ WalletState rootKey False accounts bfProjectId True
 
 main :: IO ()
 main = do
@@ -149,12 +170,16 @@ main = do
     CommandDebugRTX -> do
       walletState <- queryWalletState
       readTx walletState
+    CommandDebugWalletState -> do
+      walletState <- queryWalletState
+      debugWalletState walletState
     CommandSign -> signTx undefined undefined undefined
 
 data Command
   = CommandWipe
   | CommandCreateWallet CreateWalletOptions
   | CommandDebugRTX
+  | CommandDebugWalletState
   | CommandSign
 
 opts :: Parser Command
@@ -169,6 +194,9 @@ opts =
         <> command
           "debug-rtx"
           (info (pure CommandDebugRTX) (progDesc "read tx from blockfrost and print"))
+        <> command
+          "debug-wallet-state"
+          (info (pure CommandDebugWalletState) (progDesc "debug wallet state"))
         <> command "sign" (info (pure CommandSign) (progDesc "sign a tx"))
     )
 
@@ -192,6 +220,14 @@ queryBFProjectId = do
   case envVar of
     Nothing -> error "no blockfrost project id set"
     Just projid -> pure projid
+
+-- TODO get root key from sql
+queryRootKey :: HasCallStack => IO ByteString
+queryRootKey = do
+  envVar <- lookupEnv "ADAWALLET_ROOT_KEY"
+  case envVar of
+    Nothing -> error "no root key set"
+    Just rootKey -> pure $ fromString rootKey
 
 walletName :: IO String
 walletName = fromMaybe "default" <$> lookupEnv "ADAWALLET_NAME"
@@ -263,7 +299,7 @@ createWallet source = do
         Left err -> error $ show err
         Right v@(SomeMnemonic a) -> do
           let words = mnemonicToText a
-              wordsString = unwords (map Text.unpack words)
+              wordsString = unwords (map T.unpack words)
           print $ "Your mnemonic is: " ++ wordsString
           pure v
   let projectId = blockFrostProjectIdA source
@@ -328,3 +364,7 @@ readTx walletState = do
   let address = "addr_test1wqh4yha0ndhwykrh9cuhr47nh2y97zvkls74h4jq6uhlpacujv3z3"
   pPrint
     =<< readBlockfrostTransaction currentEra bfProjId address
+
+debugWalletState :: HasCallStack => WalletState -> IO ()
+debugWalletState walletState = do
+  print walletState
