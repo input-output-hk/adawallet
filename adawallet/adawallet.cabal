@@ -46,20 +46,22 @@ library
 
   exposed-modules:      AdaWallet
                       , Transaction
-                        -- TODO: We should put everything in 
+                        -- TODO: We should put everything in
                         -- an AdaWallet parent directory.
                       , Mnemonic.Conversion
                       , Mnemonic.Generation
 
   build-depends:        aeson             >= 1.5.6.0
                       , MissingH
+                      , aeson
+                      , base16-bytestring
+                      , bech32
                       , blockfrost-api
                       , blockfrost-client
-                      , bech32
                       , bytestring
                       , cardano-addresses
                       , cardano-addresses-cli
-                      , cardano-api ^>= 8.46
+                      , cardano-api:{cardano-api,internal} ^>= 8.46
                       , cardano-cli ^>= 8.23.1.0
                       , cardano-prelude
                       , containers

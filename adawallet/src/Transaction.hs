@@ -1,3 +1,4 @@
+{-# LANGUAGE MonoLocalBinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Transaction where
@@ -5,31 +6,48 @@ module Transaction where
 import qualified Blockfrost.Auth as BF
 import qualified Blockfrost.Client as BF
 import Cardano.Api as Api
+import Cardano.Api.SerialiseLedgerCddl as Api
 import Cardano.Api.Shelley
+import Cardano.CLI.Read (CddlTx (..))
+import qualified Codec.Binary.Bech32 as Bech32
+import Data.Aeson as A
 import Data.Bifunctor
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Lazy as LBS
+import Data.Either
+import Data.Foldable (traverse_)
 import qualified Data.Foldable as Fld
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe
 import Data.Monoid
 import Data.String (IsString (..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text as Text
+import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Encoding as Text
+import qualified Data.Text.IO as Text
+import Data.Type.Equality
 import GHC.Stack
 import Money
 import Numeric (readHex)
 import Text.Pretty.Simple
 import Prelude
 
-readBfTx :: HasCallStack => Text -> IO ()
-readBfTx projid = do
-  let address = "addr_test1wqh4yha0ndhwykrh9cuhr47nh2y97zvkls74h4jq6uhlpacujv3z3"
-      prj = BF.mkProject projid
-      -- TODO figure this out dynamically
-      era = AlonzoEraOnwardsBabbage
+-- | Get blockfrost transactions for an address
+readBlockfrostTransaction ::
+  HasCallStack =>
+  ShelleyBasedEra era ->
+  -- | Blockfrost project token
+  Text ->
+  -- | Cardano address
+  BF.Address ->
+  IO [TxOut CtxUTxO era]
+readBlockfrostTransaction sbe projid address = forShelleyBasedEraInEon sbe (error "Eras prior to Alonzo are not supported") $ \era -> do
+  let prj = BF.mkProject projid
   (latestBlocks, utxos) <- fmap (either (error . show) id) . BF.runBlockfrost prj $ do
     latestBlocks <- BF.getLatestBlock
     utxos <- BF.getAddressUtxos address
@@ -37,8 +55,7 @@ readBfTx projid = do
 
   pPrint latestBlocks
   pPrint utxos
-  let apiTxs = toApiTxOut era address <$> utxos
-  pPrint apiTxs
+  pure $ toApiTxOut era address <$> utxos
 
 toApiUTxO ::
   HasCallStack =>
@@ -116,7 +133,10 @@ toApiValue (BF.AdaAmount ll) = lovelaceToValue . fromInteger $ toInteger ll
 toApiValue (BF.AssetAmount a) = toApiMultiAsset a
 
 hexToByteString :: HasCallStack => T.Text -> BS.ByteString
-hexToByteString txt = BS.pack . map (fst . head . readHex . T.unpack) $ T.chunksOf 2 txt
+hexToByteString txt = BS.pack . map (sneakyHead . readHex . T.unpack) $ T.chunksOf 2 txt
+  where
+    sneakyHead ((p, _) : _) = p
+    sneakyHead [] = error $ "Cannot decode hex from: " <> T.unpack txt
 
 toApiMultiAsset :: HasCallStack => SomeDiscrete -> Api.Value
 toApiMultiAsset sDiscrete =
@@ -134,3 +154,47 @@ toApiMultiAsset sDiscrete =
           , fromInteger q
           )
         ]
+
+signTransaction ::
+  HasCallStack =>
+  MonadFail m =>
+  ShelleyBasedEra era ->
+  -- | signing key in Base16
+  Text ->
+  -- | transaction body in JSON envelope
+  LBS.ByteString ->
+  m (Tx era)
+signTransaction era signingKeyB16 txBodyJson = do
+  let key = WitnessPaymentKey $ either (error . ("Cannot deserialize signing key from CBOR: " <>)) id $ do
+        signingKeyBytes <- Base16.decode $ T.encodeUtf8 signingKeyB16
+        first show $ deserialiseFromCBOR (AsSigningKey AsPaymentKey) signingKeyBytes
+
+  InAnyShelleyBasedEra sbe tx <- pure . unCddlTx $ readCddlTx txBodyJson
+  Just Refl <- pure $ testEquality era sbe
+  let txBody = getTxBody tx
+      keyWitness = makeShelleyKeyWitness era txBody key
+  pure $ makeSignedTransaction [keyWitness] txBody
+
+readCddlTx :: LBS.ByteString -> CddlTx
+readCddlTx envelopeJson = do
+  let envelope =
+        either (error . ("Cannot decode envelope JSON: " <>)) id $
+          A.eitherDecode' envelopeJson
+  either (error . ("Cannot decode envelope object: " <>) . show) id $
+    deserialiseFromTextEnvelopeCddlAnyOf teTypes envelope
+  where
+    teTypes =
+      [ FromCDDLTx "Witnessed Tx ShelleyEra" CddlTx
+      , FromCDDLTx "Witnessed Tx AllegraEra" CddlTx
+      , FromCDDLTx "Witnessed Tx MaryEra" CddlTx
+      , FromCDDLTx "Witnessed Tx AlonzoEra" CddlTx
+      , FromCDDLTx "Witnessed Tx BabbageEra" CddlTx
+      , FromCDDLTx "Witnessed Tx ConwayEra" CddlTx
+      , FromCDDLTx "Unwitnessed Tx ByronEra" CddlTx
+      , FromCDDLTx "Unwitnessed Tx ShelleyEra" CddlTx
+      , FromCDDLTx "Unwitnessed Tx AllegraEra" CddlTx
+      , FromCDDLTx "Unwitnessed Tx MaryEra" CddlTx
+      , FromCDDLTx "Unwitnessed Tx AlonzoEra" CddlTx
+      , FromCDDLTx "Unwitnessed Tx BabbageEra" CddlTx
+      , FromCDDLTx "Unwitnessed Tx ConwayEra" CddlTx
+      ]

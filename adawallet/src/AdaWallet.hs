@@ -4,6 +4,7 @@
 
 module AdaWallet (main) where
 
+import Cardano.Api
 import Cardano.Mnemonic (
   MkSomeMnemonic (..),
   SomeMnemonic (..),
@@ -12,12 +13,18 @@ import Cardano.Mnemonic (
   mkMnemonic,
   mnemonicToText,
  )
+import qualified Codec.Binary.Bech32 as Bech32
 import Control.Exception (throwIO)
 import Control.Monad (forM_, join)
+import Data.Bifunctor
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 (unpack)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as Base16
 import Data.Foldable (traverse_)
 import Data.Maybe
+import Data.String (IsString (..))
+import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
@@ -62,9 +69,17 @@ import System.Directory (
  )
 import System.Environment (lookupEnv)
 import System.IO
-import System.IO.Extra (hGetPassphraseBytes, hGetSomeMnemonicInteractively)
+import System.IO.Extra (
+  hGetPassphraseBytes,
+  hGetSomeMnemonicInteractively,
+ )
+import Text.Pretty.Simple (pPrint)
 import Transaction
 import Prelude
+
+-- TODO figure this out dynamically
+currentEra :: ShelleyBasedEra BabbageEra
+currentEra = ShelleyBasedEraBabbage
 
 -- walletState passed to all commands that need it
 data Account = Account
@@ -134,11 +149,13 @@ main = do
     CommandDebugRTX -> do
       walletState <- queryWalletState
       readTx walletState
+    CommandSign -> signTx undefined undefined undefined
 
 data Command
   = CommandWipe
   | CommandCreateWallet CreateWalletOptions
   | CommandDebugRTX
+  | CommandSign
 
 opts :: Parser Command
 opts =
@@ -152,6 +169,7 @@ opts =
         <> command
           "debug-rtx"
           (info (pure CommandDebugRTX) (progDesc "read tx from blockfrost and print"))
+        <> command "sign" (info (pure CommandSign) (progDesc "sign a tx"))
     )
 
 wipeCommand :: HasCallStack => IO ()
@@ -289,7 +307,14 @@ importAccounts start end = error "Not implemented yet"
 -- Signs transaction
 -- TODO replace [String] with list of custom types to sign with
 signTx :: HasCallStack => FilePath -> Int -> [String] -> IO ()
-signTx fp account types = error "Not implemented yet"
+signTx fp account types = do
+  pPrint
+    =<< signTransaction currentEra signingKeyB16 txBodyJson
+  where
+    txBodyJson =
+      "{ \"type\": \"Unwitnessed Tx BabbageEra\", \"description\": \"Ledger Cddl Format\", \"cborHex\": \"84a30081825820d87452ce6aa5e99228528dab29da613dbbba502db26fb67efe2d5c228f14e76e00018182581d607f1e7aa1a1d9a17cbb2f466d177f67b5b8e7caa2f31b87716e8313e418640200a0f5f6\" }"
+    --  Signing key in Base16
+    signingKeyB16 = "582037ef1428378d2b353096b419d425a37d62aec6c08d1162dcb129e4da73976e8b"
 
 -- Signs multiple transactions in a tarball
 -- TODO replace [String] with list of custom types to sign with
@@ -298,5 +323,8 @@ bulkSignTx fp account types = error "Not implemented yet"
 
 readTx :: HasCallStack => WalletState -> IO ()
 readTx walletState = do
-  let bfProjId = blockFrostProjectId walletState
-  readBfTx $ Text.pack bfProjId
+  let bfProjId = fromString $ blockFrostProjectId walletState
+  -- TODO remove hardcoded address
+  let address = "addr_test1wqh4yha0ndhwykrh9cuhr47nh2y97zvkls74h4jq6uhlpacujv3z3"
+  pPrint
+    =<< readBlockfrostTransaction currentEra bfProjId address
