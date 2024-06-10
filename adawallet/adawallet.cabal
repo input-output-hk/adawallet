@@ -50,6 +50,8 @@ library
                         -- an AdaWallet parent directory.
                       , Mnemonic.Conversion
                       , Mnemonic.Generation
+                      , DB.Schema
+                      , Database
 
   build-depends:        aeson             >= 1.5.6.0
                       , MissingH
@@ -65,12 +67,15 @@ library
                       , cardano-cli ^>= 8.23.1.0
                       , cardano-prelude
                       , containers
+                      , contra-tracer
                       , either
                       , FailT
                       , formatting
+                      , monad-logger
                       , ouroboros-consensus
                       , ouroboros-network-protocols
                       , parsec
+                      , persistent
                       , persistent-sqlite
                       , pretty-simple
                       , safe-money
@@ -82,6 +87,8 @@ library
                       , transformers-except
                       , directory
                       , optparse-applicative
+                      , unliftio-core
+                      , transformers
 
 executable adawallet
   import:               base, project-config
