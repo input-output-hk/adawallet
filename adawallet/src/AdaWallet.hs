@@ -245,18 +245,7 @@ initialize = do
   createDirectoryIfMissing True stateDir'
   walletName' <- walletName
   sqliteFile <- sqliteFilePath
-  conn <- open $ T.pack sqliteFile
-
-  let queries =
-        map
-          (prepare conn)
-          [ "CREATE TABLE IF NOT EXISTS state(id INT PRIMARY KEY,version INT,root_key BLOB,is_encrypted INT,is_testnet INT,blockfrost_project_id TEXT) STRICT;"
-          , "CREATE TABLE IF NOT EXISTS account(id INT PRIMARY KEY,idx INTEGER UNIQUE,vkey BLOB NOT NULL,name TEXT) STRICT;"
-          , -- Not used yet
-            "CREATE TABLE IF NOT EXISTS utxo(id INT PRIMARY KEY,txid,tx_index,address,amount);"
-          ]
-  forM_ queries (>>= stepConn conn)
-  forM_ queries (>>= finalize)
+  createTables sqliteFile
 
 -- Restores a wallet from a mnemonic and loads the private key into sqlite
 restoreWallet :: String -> IO ()
