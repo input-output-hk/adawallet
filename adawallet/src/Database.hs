@@ -13,6 +13,7 @@ import Control.Monad.IO.Unlift (
 import Control.Monad.Logger
 import Control.Monad.Trans.Reader (ReaderT)
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Database.Persist.Sql
 import Database.Persist.Sqlite
 import System.IO
@@ -41,6 +42,17 @@ withConnection' fp shouldLog action =
     action' = withSqliteConn (T.pack fp) action
 
 -------------------------------------------------------------------------------
+-- Migrate
+-------------------------------------------------------------------------------
+
+createTables :: MonadUnliftIO m => String -> m ()
+createTables fp = do
+  migrations <- withConnection' fp False $ runSqlConn $ runMigrationSilent migrateAll
+  liftIO $ putStrLn "Executed migrations:"
+  liftIO $ mapM T.putStr migrations
+  liftIO $ print migrations
+
+-------------------------------------------------------------------------------
 -- Insert
 -------------------------------------------------------------------------------
 
@@ -63,5 +75,5 @@ insertManyAccount :: (MonadIO m, MonadUnliftIO m) => [Account] -> SqlBackend -> 
 insertManyAccount = runSqlConn . insertMany
 
 -------------------------------------------------------------------------------
--- Queries
+-- Query
 -------------------------------------------------------------------------------
