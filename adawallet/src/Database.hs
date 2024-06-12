@@ -1,11 +1,12 @@
+{-# LANGUAGE TypeApplications #-}
+
 module Database where
 
 import DB.Schema
 import Data.Text (Text)
 import Database.Sqlite
 
--- import Cardano.Prelude
-
+import Cardano.Prelude (listToMaybe)
 import Control.Monad.IO.Unlift (
   MonadIO (..),
   MonadUnliftIO,
@@ -14,7 +15,9 @@ import Control.Monad.Logger
 import Control.Monad.Trans.Reader (ReaderT)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Database.Persist.Class.PersistQuery
 import Database.Persist.Sql
+import Database.Persist.Sql (Entity, deleteWhere, selectList)
 import Database.Persist.Sqlite
 import System.IO
 import Prelude
@@ -77,3 +80,18 @@ insertManyAccount = runSqlConn . insertMany
 -------------------------------------------------------------------------------
 -- Query
 -------------------------------------------------------------------------------
+
+queryState :: (MonadIO m, MonadUnliftIO m) => SqlBackend -> m (Maybe State)
+queryState = runSqlConn $ do
+  states <- selectList [] []
+  pure $ listToMaybe (entityVal <$> states)
+
+-------------------------------------------------------------------------------
+-- Delete
+-------------------------------------------------------------------------------
+
+-- | Returns True if deleted
+deleteState :: (MonadIO m, MonadUnliftIO m) => SqlBackend -> m Bool
+deleteState = runSqlConn $ do
+  count <- deleteWhereCount @State []
+  pure $ count > 0
