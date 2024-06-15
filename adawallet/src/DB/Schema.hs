@@ -33,16 +33,19 @@ share
       is_encrypted   Bool
       is_testnet     Bool
       blockfrost_project_id  Text
+      deriving Show
 
     Utxo
       txid          ByteString
       tx_index      Int
       address       ByteString
       amount        Int
+      deriving Show
 
     Account
       idx               Int
       vkey              ByteString
       name              Text
       Primary idx
+      deriving Show
    |]
