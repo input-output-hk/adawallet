@@ -200,7 +200,6 @@ initialize = do
       pure Nothing
     Just st -> do
       let accounts = [] -- map dbAccountToWalletAccount queryAccounts
-      print st
       pure $
         Just $
           WalletState
@@ -306,6 +305,7 @@ createWallet source = do
       let isEncrypted = passphrase /= ""
           stateTable = DB.State 1 xprv isEncrypted testnet (T.pack projectId)
       fp <- sqliteFilePath
+      void $ withConnection fp deleteState
       void $ withConnection fp (insertState stateTable)
   where
     maybePassphrase :: ByteString -> Maybe Passphrase

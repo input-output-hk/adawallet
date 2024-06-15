@@ -51,9 +51,12 @@ withConnection' fp shouldLog action =
 createTables :: MonadUnliftIO m => String -> m ()
 createTables fp = do
   migrations <- withConnection' fp False $ runSqlConn $ runMigrationSilent migrateAll
-  liftIO $ putStrLn "Executed migrations:"
-  liftIO $ mapM T.putStr migrations
-  liftIO $ print migrations
+  case migrations of
+    [] -> pure ()
+    _ -> do
+      liftIO $ putStrLn "Executed migrations:"
+      liftIO $ mapM T.putStr migrations
+      liftIO $ print migrations
 
 -------------------------------------------------------------------------------
 -- Insert
