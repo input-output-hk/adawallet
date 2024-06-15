@@ -86,6 +86,11 @@ queryState = runSqlConn $ do
   states <- selectList [] []
   pure $ listToMaybe (entityVal <$> states)
 
+queryAccounts :: (MonadIO m, MonadUnliftIO m) => SqlBackend -> m [Account]
+queryAccounts = runSqlConn $ do
+  accts <- selectList [] []
+  pure $ entityVal <$> accts
+
 -------------------------------------------------------------------------------
 -- Delete
 -------------------------------------------------------------------------------

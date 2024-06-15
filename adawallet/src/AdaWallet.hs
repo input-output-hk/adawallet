@@ -111,53 +111,11 @@ data WalletState = WalletState
   }
   deriving (Show, Read, Eq)
 
--- sqlite table structures
-data StateTable = StateTable
-  { version :: Int
-  , root_key :: ByteString
-  , is_encrypted :: Bool
-  , is_testnet :: Bool
-  , blockfrost_project_id :: String
-  }
-  deriving (Show, Read, Eq)
-
-data AccountTable = AccountTable
-  { idx :: Int
-  , vkey :: ByteString
-  , name :: Maybe String
-  }
-  deriving (Show, Read, Eq)
-
 -- TODO query from database
-queryWalletState :: IO WalletState
-queryWalletState = do
-  bfProjectId <- queryBFProjectId
-  rootKey <- queryRootKey
-
-  let acct =
-        Account
-          0
-          Nothing
-          "acct_xvk1jk900g6aj69l6yx24ug7cdc2ax7cxesrg2synxaevj2j9mlmtysp9jc6j3pezn7y9zkegfdv0lfyln9wdw7zsu64wj0l04k99ugktlgvnx703"
-          Nothing
-          ""
-          Nothing
-          ""
-          Nothing
-          ""
-          Nothing
-          ""
-          Nothing
-          ""
-          ""
-          ""
-      accounts = [acct]
-
-  pure $ WalletState rootKey False accounts bfProjectId True
 
 main :: IO ()
 main = do
-  initialize
+  walletState <- initialize
   cmd <-
     execParser $
       info
@@ -170,10 +128,8 @@ main = do
     CommandWipe -> wipeCommand
     CommandCreateWallet options -> createWallet options
     CommandDebugRTX -> do
-      walletState <- queryWalletState
       readTx walletState
     CommandDebugWalletState -> do
-      walletState <- queryWalletState
       debugWalletState walletState
     CommandSign -> signTx undefined undefined undefined
 
@@ -219,14 +175,6 @@ stateDir = do
   let fromXdg = getXdgDirectory XdgData "adawallet"
   maybe fromXdg pure fromEnv
 
--- TODO get project ID from sql
-queryBFProjectId :: HasCallStack => IO String
-queryBFProjectId = do
-  envVar <- lookupEnv "ADAWALLET_BLOCKFROST_PROJ_ID"
-  case envVar of
-    Nothing -> error "no blockfrost project id set"
-    Just projid -> pure projid
-
 -- TODO get root key from sql
 queryRootKey :: HasCallStack => IO ByteString
 queryRootKey = do
@@ -239,17 +187,64 @@ walletName :: IO String
 walletName = fromMaybe "default" <$> lookupEnv "ADAWALLET_NAME"
 
 -- TODO: do more than just create tables
-initialize :: HasCallStack => IO ()
+initialize :: HasCallStack => IO (Maybe WalletState)
 initialize = do
   stateDir' <- stateDir
   createDirectoryIfMissing True stateDir'
   walletName' <- walletName
   sqliteFile <- sqliteFilePath
-  createTables sqliteFile
+  state <- withConnection sqliteFile queryState
+  case state of
+    Nothing -> do
+      createTables sqliteFile
+      pure Nothing
+    Just st -> do
+      let accounts = [] -- map dbAccountToWalletAccount queryAccounts
+      print st
+      pure $
+        Just $
+          WalletState
+            (DB.stateRoot_key st)
+            (DB.stateIs_encrypted st)
+            accounts
+            (T.unpack $ DB.stateBlockfrost_project_id st)
+            (DB.stateIs_testnet st)
 
--- Restores a wallet from a mnemonic and loads the private key into sqlite
-restoreWallet :: String -> IO ()
-restoreWallet mmemonic = error "Not implemented yet"
+-- dbAccountToWalletAccount :: DB.Account -> Account
+-- dbAccountToWalletAccount dbAcct =
+--  Account
+--    idx
+--    dbAcct
+--    Nothing
+--    vkey
+--    dbAcct
+--    Nothing
+--    ""
+--    Nothing
+--    ""
+--    Nothing
+--    ""
+--    Nothing
+--    ""
+--    Nothing
+--    ""
+--    ""
+--    ""
+
+-- dbStateToWalletState :: Maybe DB.State -> [Account] -> Maybe WalletState
+-- dbStateToWalletState dbState accounts = case dbState of
+--  Nothing -> Nothing
+--  Just st ->
+--    WalletState
+--      DB.root_key
+--      st
+--      is_encrypted
+--      st
+--      accounts
+--      is_testnet
+--      st
+--      blockfrost_project_id
+--      st
 
 data MnemonicSource
   = StdInput
@@ -311,7 +306,7 @@ createWallet source = do
       let isEncrypted = passphrase /= ""
           stateTable = DB.State 1 xprv isEncrypted testnet (T.pack projectId)
       fp <- sqliteFilePath
-      void $ withConnectionDebug fp (insertState stateTable)
+      void $ withConnection fp (insertState stateTable)
   where
     maybePassphrase :: ByteString -> Maybe Passphrase
     maybePassphrase "" = Nothing
@@ -349,14 +344,16 @@ signTx fp account types = do
 bulkSignTx :: HasCallStack => FilePath -> Int -> [String] -> IO ()
 bulkSignTx fp account types = error "Not implemented yet"
 
-readTx :: HasCallStack => WalletState -> IO ()
-readTx walletState = do
-  let bfProjId = fromString $ blockFrostProjectId walletState
-  -- TODO remove hardcoded address
-  let address = "addr_test1wqh4yha0ndhwykrh9cuhr47nh2y97zvkls74h4jq6uhlpacujv3z3"
-  pPrint
-    =<< readBlockfrostTransaction currentEra bfProjId address
+readTx :: HasCallStack => Maybe WalletState -> IO ()
+readTx maybeWalletState = case maybeWalletState of
+  Nothing -> error "No blockfrost project id. Initialize a wallet first"
+  Just walletState -> do
+    let bfProjId = fromString $ blockFrostProjectId walletState
+    -- TODO remove hardcoded address
+    let address = "addr_test1wqh4yha0ndhwykrh9cuhr47nh2y97zvkls74h4jq6uhlpacujv3z3"
+    pPrint
+      =<< readBlockfrostTransaction currentEra bfProjId address
 
-debugWalletState :: HasCallStack => WalletState -> IO ()
+debugWalletState :: HasCallStack => Maybe WalletState -> IO ()
 debugWalletState walletState = do
   print walletState
