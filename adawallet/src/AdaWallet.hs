@@ -193,10 +193,10 @@ initialize = do
   createDirectoryIfMissing True stateDir'
   walletName' <- walletName
   sqliteFile <- sqliteFilePath
+  createTables sqliteFile
   state <- withConnection sqliteFile queryState
   case state of
     Nothing -> do
-      createTables sqliteFile
       pure Nothing
     Just st -> do
       let accounts = [] -- map dbAccountToWalletAccount queryAccounts
