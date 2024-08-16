@@ -296,8 +296,6 @@ createWallet source = do
   passphrase <-
     hGetPassphraseBytes (stdin, stderr) Explicit Interactive promptPass Utf8
 
-  putStrLn $ unpack passphrase
-
   root_key <- mnemonicToRootExtendedPrivateKey someMnemonic (maybePassphrase passphrase)
   case root_key of
     Left e -> error $ "problem occurred: " ++ show e
