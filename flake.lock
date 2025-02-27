@@ -3,11 +3,11 @@
     "CHaP": {
       "flake": false,
       "locked": {
-        "lastModified": 1717745122,
-        "narHash": "sha256-RW0mbVghzN/ywg3CVsdHPB3WCj8KAEAS0egV4PFro/4=",
+        "lastModified": 1739645821,
+        "narHash": "sha256-HjAchUMLsiScm8Jyd+I/5YJKUjDp1r+XFzr05d+o+r4=",
         "owner": "intersectmbo",
         "repo": "cardano-haskell-packages",
-        "rev": "a8d2c3e2b819e2f331aae71de5544a855a267e65",
+        "rev": "48b941c5729384f38b79c6f473ddbf920cb310ea",
         "type": "github"
       },
       "original": {
@@ -207,18 +207,19 @@
         "url": "https://gitlab.haskell.org/ghc/ghc"
       }
     },
-    "hackage": {
+    "hackageNix": {
       "flake": false,
       "locked": {
-        "lastModified": 1717893607,
-        "narHash": "sha256-hAPKRc5E6GwiefyXQ+8StJ+Tzfj+/e/nQSWRt4BUBQA=",
+        "lastModified": 1740529433,
+        "narHash": "sha256-miXEl6aUVdLwXSzboBd8leu4O7GLLqu2ncpwV9GfRGo=",
         "owner": "input-output-hk",
         "repo": "hackage.nix",
-        "rev": "021eba0183dede166efc3d6e798862386c78d87f",
+        "rev": "1e43558351b59caeb3646550c0b3f045578ce32d",
         "type": "github"
       },
       "original": {
         "owner": "input-output-hk",
+        "ref": "for-stackage",
         "repo": "hackage.nix",
         "type": "github"
       }
@@ -234,7 +235,9 @@
         "ghc-8.6.5-iohk": "ghc-8.6.5-iohk",
         "ghc910X": "ghc910X",
         "ghc911": "ghc911",
-        "hackage": "hackage",
+        "hackage": [
+          "hackageNix"
+        ],
         "hls-1.10": "hls-1.10",
         "hls-2.0": "hls-2.0",
         "hls-2.2": "hls-2.2",
@@ -773,6 +776,7 @@
       "inputs": {
         "CHaP": "CHaP",
         "flake-utils": "flake-utils",
+        "hackageNix": "hackageNix",
         "haskellNix": "haskellNix",
         "incl": "incl",
         "iohkNix": "iohkNix",

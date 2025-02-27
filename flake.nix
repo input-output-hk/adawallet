@@ -2,7 +2,14 @@
   description = "adawallet";
 
   inputs = {
-    haskellNix.url = "github:input-output-hk/haskell.nix";
+    haskellNix = {
+      url = "github:input-output-hk/haskell.nix";
+      inputs.hackage.follows = "hackageNix";
+    };
+    hackageNix = {
+      url = "github:input-output-hk/hackage.nix?ref=for-stackage";
+      flake = false;
+    };
     nixpkgs.follows = "haskellNix/nixpkgs-unstable";
     iohkNix.url = "github:input-output-hk/iohk-nix";
     incl.url = "github:divnix/incl";

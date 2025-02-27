@@ -53,7 +53,7 @@ library
                       , DB.Schema
                       , Database
 
-  build-depends:        aeson             >= 1.5.6.0
+  build-depends:        aeson             >= 2.1.0.0
                       , MissingH
                       , aeson
                       , base16-bytestring
@@ -63,8 +63,8 @@ library
                       , bytestring
                       , cardano-addresses
                       , cardano-addresses-cli
-                      , cardano-api:{cardano-api,internal} ^>= 8.46
-                      , cardano-cli ^>= 8.23.1.0
+                      , cardano-api:{cardano-api,internal} ^>= 10.1.0.0
+                      , cardano-cli ^>= 10.1.0.0
                       , cardano-prelude
                       , containers
                       , contra-tracer

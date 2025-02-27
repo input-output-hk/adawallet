@@ -31,6 +31,7 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text.IO as Text
 import Data.Type.Equality
+import GHC.Exts (fromList)
 import GHC.Stack
 import Money
 import Numeric (readHex)
@@ -105,7 +106,7 @@ toApiDatum ::
   Maybe BF.InlineDatum ->
   TxOutDatum CtxUTxO era
 toApiDatum w mDatumHash mInlineDatum = do
-  let era = alonzoEraOnwardsToCardanoEra w
+  let era = toCardanoEra w
   case (mDatumHash, mInlineDatum) of
     (Nothing, Nothing) -> TxOutDatumNone
     (Just (BF.DatumHash dHash), Nothing) ->
@@ -148,7 +149,7 @@ toApiMultiAsset sDiscrete =
           (error $ "toApiMultiAsset: " <> Text.unpack aName <> " is not hex encoded")
           id
           (deserialiseFromRawBytesHex AsAssetName $ Text.encodeUtf8 aName)
-   in valueFromList
+   in fromList
         [
           ( AssetId (fromString $ Text.unpack pId) assetName
           , fromInteger q
