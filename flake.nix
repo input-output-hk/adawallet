@@ -2,7 +2,7 @@
   description = "adawallet";
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
-    cardano-parts.url = "github:input-output-hk/cardano-parts";
+    cardano-parts.url = "github:input-output-hk/cardano-parts/v2025-05-01";
     nixpkgs.follows = "cardano-parts/nixpkgs";
   };
   outputs = { self, flake-utils, nixpkgs, cardano-parts, ... }@inputs: let
