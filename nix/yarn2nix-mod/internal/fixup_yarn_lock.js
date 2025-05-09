@@ -25,16 +25,25 @@ const result = []
 
 readFile
   .on('line', line => {
-    const arr = line.match(/^ {2}resolved "([^#]+)(#[^"]+)?"$/)
+    // Adjust regex to also handled scoped and early escaped packages
+    const arr = line.match(/^ {2}resolved "([^"]+)"$/)
 
-    if (arr !== null) {
-      const [_, url, shaOrRev] = arr
+    if (arr) {
+      const [_, target] = arr;
 
-      const fileName = urlToName(url)
-
-      result.push(`  resolved "${fileName}${shaOrRev ?? ''}"`)
-    } else {
-      result.push(line)
+      // Only rewrite if it's an actual URL (http or yarn-escaped)
+      if (/^https?:/.test(target) || target.startsWith('https___')) {
+        const rewritten = urlToName(target);
+        console.error(`🔁 Rewriting: ${target} → ${rewritten}`);
+        result.push(`  resolved "${rewritten}"`);
+      }
+      else {
+        // Already a safe filename — do not touch
+        result.push(line);
+      }
+    }
+    else {
+      result.push(line);
     }
   })
   .on('close', () => {
