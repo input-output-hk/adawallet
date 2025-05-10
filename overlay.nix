@@ -67,6 +67,7 @@ in final: prev: {
       blockfrost
       cardano-address
       cardano-cli
+      cardano-node
       cardano-hw-cli
       python3Packages.apsw
       python3Packages.ipython
