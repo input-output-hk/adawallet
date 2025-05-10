@@ -46,6 +46,7 @@
           blockfrost
           cardano-address
           cardano-cli
+          cardano-hw-cli
           ;
       };
 

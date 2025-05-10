@@ -15,11 +15,11 @@
 # patchelf'd.
 #
 # Additionally the latest release at the time of this writing still requires
-# quite an old node version which comes with it's own challenges such as:
+# quite an old node version which comes with its own challenges such as:
 #
 #   * The nixpkgs associated with the required node version has yarn2nix
-#   infrastructure doesn't support sha512 yarn hashes even though the project
-#   itself has adopted them in their yarn.lock file.
+#   infrastructure that doesn't support sha512 yarn hashes even though the
+#   project itself has adopted them in their yarn.lock file.
 #
 #   * Newer yarn2nix nixpkgs build infrastructure isn't easily portable to old
 #   nixpkgs
@@ -39,8 +39,8 @@
 # ../nix/yarn2nix-mod/ files contain patches which support scoped and early
 # escaped package urls.
 #
-# When this project bumps their node requirement to a newer version, building
-# will get easier!
+# When this project bumps their node requirement to a newer version, nix
+# packaging will get easier!
 
 {pkgs}: let
   inherit (yarn2nixMod) mkYarnPackage mkYarnModules mkYarnNix importOfflineCache;
