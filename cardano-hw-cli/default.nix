@@ -58,8 +58,8 @@
 # packaging will get easier!
 #
 {pkgs}: let
+  inherit (pkgs.lib) licenses optionalString;
   inherit (yarn2nixMod) mkYarnPackage mkYarnModules mkYarnNix importOfflineCache;
-  inherit (builtins) trace;
 
   # When building locally with uncached variants, fresh nodejs source builds can
   # take > 1 hr. Using ccache, build iteration can be brought down to a minute
@@ -105,7 +105,7 @@
       ];
 
     configurePhase = ''
-      ${if useCcache then ''
+      ${optionalString useCcache ''
         mkdir -p ./wrapped-bin
         for compiler in gcc g++ cc c++; do
           ln -sf ${pkgs.ccache}/libexec/ccache/$compiler ./wrapped-bin/$compiler
@@ -130,7 +130,7 @@
         echo "Resolved c++: $(${pkgs.which}/bin/which c++)"
         echo "Resolved gcc: $(${pkgs.which}/bin/which gcc)"
         ccache -p
-      '' else trace "For fast local dev builds, consider setting useCcache to true." ""}
+      ''}
 
       ./configure --prefix=$out
     '';
@@ -340,4 +340,11 @@ in
       distPhase = ''
         echo "Skipping distPhase for a top-level build"
       '';
+
+      meta = {
+        description = "Cardano CLI tool for hardware wallets";
+        homepage = "https://github.com/vacuumlabs/cardano-hw-cli";
+        license = licenses.isc;
+        mainProgram = "cardano-hw-cli";
+      };
     }

@@ -26,6 +26,13 @@ in final: prev: {
       ${final.docopt_completion}/bin/docopt-completion $out/bin/adawallet --manual-zsh
       cp _adawallet $out/share/zsh/site-functions/_adawallet
     '';
+
+    meta = {
+      description = "A single address wallet that supports menmonics and hardware wallets";
+      homepage = "https://github.com/input-output-hk/adawallet";
+      license = final.lib.licenses.asl20;
+      mainProgram = "adawallet";
+    };
   };
 
   # nodePkgs provides node 18.7.0 explicitly required by cardano-hw-cli
