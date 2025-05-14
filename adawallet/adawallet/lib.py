@@ -25,10 +25,11 @@ def input_mnemonic():
 class AdaWallet:
     """A single address wallet library that supports mnemonics and hardware wallets"""
 
-    def __init__(self, state_dir):
+    def __init__(self, state_dir, debug):
         self.state_dir = Path(state_dir)
         self.accounts = {}
         self.db = None
+        self.debug = debug
         self.wallet_initialized = False
         self.load_state()
 

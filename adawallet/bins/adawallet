@@ -83,8 +83,9 @@ if len(sys.argv) == 1:
 
 arguments = docopt(__doc__, version='Ada Wallet 1.0')
 state_dir = os.getenv('ADAWALLET_STATE', './state-adawallet')
+debug = "True" == os.getenv('DEBUG', 'False')
 
-adawallet = AdaWallet(state_dir)
+adawallet = AdaWallet(state_dir, debug)
 if arguments['wipe']:
     adawallet.wipe()
     exit(0)
