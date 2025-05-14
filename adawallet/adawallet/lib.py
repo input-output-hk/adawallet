@@ -792,8 +792,13 @@ class AdaWallet:
         try:
             bf_utxos = self.blockfrost.address_utxos(address=address)
         except ApiError as e:
-            print(e)
-            exit(1)
+            if e.status_code == 404:
+                print(f"Address {address} has no UTXO")
+                return []
+            else:
+                print(f"Error obtaining UTXO for address {address}:")
+                print(e)
+                exit(1)
         for utxo in bf_utxos:
             # TODO: this is a hack assuming utxo only has lovelace if amount == 1
             if len(utxo.amount) == 1:
@@ -801,4 +806,5 @@ class AdaWallet:
                 txid = utxo.tx_hash
                 index = utxo.tx_index
                 utxos.append((txid, index, address, amount))
+        print(f"Address {address} has {len(utxos)} UTXO.")
         return utxos
