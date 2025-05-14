@@ -52,8 +52,8 @@ in final: prev: {
   };
 
   blockfrost = final.python3Packages.buildPythonPackage rec {
-    pname = "blockfrost-python";
-    version = "0.5.3";
+    pname = "blockfrost_python";
+    version = "0.6.0";
 
     propagatedBuildInputs = [
       final.python3Packages.requests
@@ -62,7 +62,7 @@ in final: prev: {
 
     src = final.python3Packages.fetchPypi {
       inherit pname version;
-      sha256 = "sha256-MVS5mGfncUyQBkyeGjfjt6+XwQe2RUndDUJKqjIJAX4=";
+      sha256 = "sha256-dkt5Vheq39cSsqIU+mvSbMoz8ACDQOAiUSbRi+BAsRI=";
     };
 
     doCheck = false;
