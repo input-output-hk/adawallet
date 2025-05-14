@@ -39,7 +39,7 @@ Options:
     --snapshot <FILE>           UTXO snapshot to load into database
     --pool-transactions <FILE>  Tarball containing transactions with pool registration certificates
     --delegations <FILE>        JSON file containing map of accounts to pool ids
-    --rosetta-url <URL>         Rosetta URL [default: https://explorer.cardano.org/rosetta]
+    --rosetta-url <URL>         DEPRECATED: Rosetta URL [default: https://explorer.cardano.org/rosetta]
     --account <INT>             Account of wallet to use
     --fee <INT>                 Fee to use for transaction
     --deposit <INT>             Total deposits in transaction [default: 2000000]
@@ -56,6 +56,20 @@ Options:
     --transactions-file <FILE>  Specify a transactions file to perform operations on
     --seconds <INT>             Seconds from now for tx to live
     --recipients <FILE>         JSON list of funds to send
+
+Environment Variables:
+    ADAWALLET_STATE             Directory path for adawallet state; defaults to ./state-adawallet
+    BLOCKFROST_API_URL          Appropriate blockfrost base url; defaults to mainnet.  Must regex match form of: ^https://cardano-(mainnet|preview).blockfrost.io/api$
+    BLOCKFROST_PROJECT_ID       Appropriate blockfrost project secret; no default.  Must regex match form of: ^(mainnet|preview)[A-Za-z0-9]{32}$
+
+Tips:
+    * BLOCKFROST_PROJECT_ID secret env var must be set
+    * BLOCKFROST_API_URL must be set if using testnet operations
+    * Testnet options default to the cardano preview network with testnet-magic of 2
+    * Exporting accounts will not export secrets
+    * Importing accounts from exported accounts json file without secrets with not regenerate secrets
+    * Use import-accounts with start and end options on fresh adawallet state for account secrets regeneration
+    * Rosetta usage is deprecated
 """
 
 import sys
