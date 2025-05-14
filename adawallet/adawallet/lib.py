@@ -223,6 +223,7 @@ class AdaWallet:
             stake.flush()
             cli_args = [
                 "cardano-cli",
+                "latest",
                 "stake-address",
                 "build",
                 *self.magic_args,
