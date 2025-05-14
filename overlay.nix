@@ -28,7 +28,7 @@ in final: prev: {
     '';
 
     meta = {
-      description = "A single address wallet that supports menmonics and hardware wallets";
+      description = "A single address wallet that supports mnemonics and hardware wallets";
       homepage = "https://github.com/input-output-hk/adawallet";
       license = final.lib.licenses.asl20;
       mainProgram = "adawallet";

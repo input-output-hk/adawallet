@@ -26,7 +26,7 @@ def input_mnemonic():
                 return words
 
 class AdaWallet:
-    """A single address wallet library that supports menmonics and hardware wallets"""
+    """A single address wallet library that supports mnemonics and hardware wallets"""
 
     def __init__(self, state_dir):
         self.state_dir = Path(state_dir)
