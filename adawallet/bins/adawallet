@@ -54,7 +54,7 @@ Options:
     --sign                      Sign Transaction
     --utxo-file <FILE>          JSON file containing utxos
     --transactions-file <FILE>  Specify a transactions file to perform operations on
-    --seconds <INT>             Seconds from now for tx to live
+    --seconds <INT>             Seconds from now for tx to live [default: 7200]
     --recipients <FILE>         JSON list of funds to send
 
 Environment Variables:
@@ -259,10 +259,7 @@ elif arguments['import-accounts']:
 elif arguments['get-ttl']:
     if adawallet.wallet_initialized:
         tip = int(adawallet.get_slot_tip())
-        if arguments['--seconds']:
-            ttl = tip + int(arguments['--seconds'])
-        else:
-            ttl = tip + 5000
+        ttl = tip + int(arguments['--seconds'])
         print(ttl)
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
