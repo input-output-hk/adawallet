@@ -358,7 +358,7 @@ class AdaWallet:
                 vkey_contents = vkey.read()
             return (vkey_contents, skey_contents)
 
-    def sign_tx(self, account, tx_body, out_file, stake=False):
+    def sign_tx(self, account, tx_body, out_file, stake=False, era="latest"):
         if account not in self.accounts:
             self.import_account(account)
 
@@ -414,6 +414,7 @@ class AdaWallet:
                 signing_args = []
                 payment_skey.write(self.accounts[account]["payment_skey"])
                 payment_skey.flush()
+
                 signing_args.extend(["--signing-key-file", payment_skey.name])
 
                 if stake:
@@ -422,6 +423,7 @@ class AdaWallet:
                     signing_args.extend(["--signing-key-file", stake_skey.name])
                 cli_args = [
                     "cardano-cli",
+                    era,
                     "transaction",
                     "sign",
                     "--tx-body-file",
@@ -430,11 +432,12 @@ class AdaWallet:
                     out_file,
                     *signing_args
                 ]
+
+                if self.debug:
+                    print(f"def sign_tx: {" ".join(cli_args)}")
+
                 p = subprocess.run(cli_args, capture_output=True, text=True)
                 if p.returncode != 0 or not os.path.exists(out_file):
-                    print(" ".join(cli_args))
-                    # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
-                    print(p.stdout)
                     print(p.stderr)
                     raise Exception(f"Unknown error signing transaction with account {account}")
             return
