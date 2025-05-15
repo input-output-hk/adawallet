@@ -3,17 +3,17 @@
 
 Usage:
     adawallet init-create [--testnet] [--rosetta-url URL]
-    adawallet init-restore [--testnet] [--rosetta-url URL]
     adawallet init-hardware [--testnet] [--rosetta-url URL]
     adawallet init-read-only [--testnet] [--rosetta-url URL]
+    adawallet init-restore [--testnet] [--rosetta-url URL]
     adawallet import-accounts -s 0 -e 7 [--accounts-file FILE_JSON]
-    adawallet load-utxo --snapshot FILE_JSON
-    adawallet fetch-utxos
-    adawallet get-ttl [--seconds INT]
-    adawallet import-utxos --utxo-file FILE_JSON
-    adawallet export-utxos --utxo-file FILE_JSON
-    adawallet export-accounts --accounts-file FILE_JSON
     adawallet import-accounts --accounts-file FILE_JSON
+    adawallet import-utxos --utxo-file FILE_JSON
+    adawallet fetch-utxos
+    adawallet load-utxo --snapshot FILE_JSON
+    adawallet get-ttl [--seconds INT]
+    adawallet export-accounts --accounts-file FILE_JSON
+    adawallet export-utxos --utxo-file FILE_JSON
     adawallet stake-registration-tx --account 0 --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign] [--deposit 2000000]
     adawallet delegate-pool-tx --account 0 --pool-id BECH32_POOL --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
     adawallet send-tx --account 0 --address BECH32_ADDR --amount 5000000 --fee 200000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
