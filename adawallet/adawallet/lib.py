@@ -734,13 +734,40 @@ class AdaWallet:
             ]
 
             if self.debug:
-                print(f"def build_tx: {" ".join(cli_args)}")
+                print(f"def delegate_pool_tx: {" ".join(cli_args)}")
 
             p = subprocess.run(cli_args, capture_output=True, text=True)
             if p.returncode != 0:
                 print(p.stderr)
                 raise Exception(f"Unknown error generating stake delegation certificate for account {account}")
             result = self.build_tx(account, out_file, fee, certificates=[delegation_certificate.name], ttl=ttl, sign=sign, stake=True)
+        return result
+
+    def delegate_vote_tx(self, account, voteType, voteTarget, out_file, fee, ttl=None, sign=False, era="latest"):
+        with tempfile.NamedTemporaryFile("w+") as vote_delegation_certificate, tempfile.NamedTemporaryFile("w+") as vkey:
+            vkey.write(self.accounts[account]["stake_vkey"])
+            vkey.flush()
+            cli_args = [
+                "cardano-cli",
+                era,
+                "stake-address",
+                "vote-delegation-certificate",
+                f"--{voteType}",
+                *([voteTarget] if voteTarget is not None else []),
+                "--stake-verification-key-file",
+                vkey.name,
+                "--out-file",
+                vote_delegation_certificate.name
+            ]
+
+            if self.debug:
+                print(f"def delegate_vote_tx: {" ".join(cli_args)}")
+
+            p = subprocess.run(cli_args, capture_output=True, text=True)
+            if p.returncode != 0:
+                print(p.stderr)
+                raise Exception(f"Unknown error generating vote delegation certificate for account {account}")
+            result = self.build_tx(account, out_file, fee, certificates=[vote_delegation_certificate.name], ttl=ttl, sign=sign, stake=True)
         return result
 
     def drain_tx(self, account, send_addr, out_file, fee, ttl=None, sign=False):

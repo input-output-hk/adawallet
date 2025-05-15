@@ -16,6 +16,7 @@ Usage:
     adawallet export-utxos --utxo-file FILE_JSON
     adawallet stake-registration-tx --account 0 --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign] [--deposit 2000000]
     adawallet delegate-pool-tx --account 0 --pool-id BECH32_POOL --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
+    adawallet delegate-vote-tx --account 0 --voteType VOTE_TYPE [--voteTarget VOTE_TARGET] --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
     adawallet send-tx --account 0 --address BECH32_ADDR --amount 5000000 --fee 200000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
     adawallet sign-tx --account 0 --tx-body-file FILE_TX --out-file FILE_TX_SIGNED [--stake]
     adawallet witness-tx --account 0 --tx-body-file FILE_TX --out-file FILE_WITNESS [--payment | --stake]
@@ -30,36 +31,40 @@ Usage:
     adawallet wipe
 
 Options:
-    -h --help                       Show this screen
-    --version                       Show version
-    -s --start <INT>                Starting account
-    -e --end <INT>                  Ending account
-    -t --testnet                    Use testnet addresses
-    --account <INT>                 Account of wallet to use
-    --accounts-file <FILE_JSON>     Specify an accounts file to perform operations on
-    --address <BECH32_ADDR>         Address as bech32
-    --amount <INT>                  Amount to send
-    --delegations <FILE_JSON>       JSON file containing map of accounts to pool ids {"0": "bech32_pool1", ...}
-    --deposit <INT>                 Total deposits in transaction [default: 2000000]
-    --fee <INT>                     Fee to use for transaction
-    --out-file <FILE>               Output file, type varies -- see suffix indicated in the usage section
-    --payment                       Witness with payment key
-    --pool-id <BECH32_POOL>         Pool id hash as bech32
-    --recipients <FILE_JSON>        JSON list of funds to send in the form {"bech32_addr_recipient1": lovelace, ...}
-    --rosetta-url <URL>             DEPRECATED: Rosetta URL [default: https://explorer.cardano.org/rosetta]
-    --seconds <INT>                 Seconds from now for tx to live [default: 7200]
-    --sign                          Sign Transaction
-    --snapshot <FILE_JSON>          UTXO snapshot to load into database
-    --stake                         Sign/Witness with stake key
-    --transactions-file <FILE_TGZ>  Specify a transactions file to perform operations on; a gzipped tarball is expected
-    --ttl <INT>                     Absolute slot number time to live for transaction(s)
-    --tx-body-file <FILE_TX>        Body of TX
-    --utxo-file <FILE_JSON>         JSON file containing utxos
+    -h --help                                Show this screen
+    --version                                Show version
+    -s --start <INT>                         Starting account
+    -e --end <INT>                           Ending account
+    -t --testnet                             Use testnet addresses
+    --account <INT>                          Account of wallet to use
+    --accounts-file <FILE_JSON>              Specify an accounts file to perform operations on
+    --address <BECH32_ADDR>                  Address as bech32
+    --amount <INT>                           Amount to send
+    --delegations <FILE_JSON>                JSON file containing map of accounts to pool ids {"0": "$bech32_pool", ...}
+    --deposit <INT>                          Total deposits in transaction [default: 2000000]
+    --drep-id <BECH32_POOL>                  Drep id hash as bech32
+    --fee <INT>                              Fee to use for transaction
+    --out-file <FILE>                        Output file, type varies -- see suffix indicated in the usage section
+    --payment                                Witness with payment key
+    --pool-id <BECH32_POOL>                  Pool id hash as bech32
+    --recipients <FILE_JSON>                 JSON list of funds to send in the form {"$bech32_addr_recipient": $lovelace, ...}
+    --rosetta-url <URL>                      DEPRECATED: Rosetta URL [default: https://explorer.cardano.org/rosetta]
+    --seconds <INT>                          Seconds from now for tx to live [default: 7200]
+    --sign                                   Sign Transaction
+    --snapshot <FILE_JSON>                   UTXO snapshot to load into database
+    --stake                                  Sign/Witness with stake key
+    --transactions-file <FILE_TGZ>           Specify a transactions file to perform operations on; a gzipped tarball is expected
+    --ttl <INT>                              Absolute slot number time to live for transaction(s)
+    --tx-body-file <FILE_TX>                 Body of TX
+    --utxo-file <FILE_JSON>                  JSON file containing utxos
+    --voteTarget <VOTE_TARGET>               The vote delegation target; must be a <HASH>, <STRING>, or <FILEPATH>
+    --voteType <VOTE_TYPE>                   The vote delegation type; must be one of the following strings:
+                                             "drep-key-hash", "drep-script-hash", "drep-verification-key", "drep-verification-key-file", "always-abstain", "always-no-confidence"
 
 Environment Variables:
-    ADAWALLET_STATE                 Directory path for adawallet state; defaults to ./state-adawallet
-    BLOCKFROST_API_URL              Appropriate blockfrost base url; defaults to mainnet.  Must regex match form of: ^https://cardano-(mainnet|preview).blockfrost.io/api$
-    BLOCKFROST_PROJECT_ID           Appropriate blockfrost project secret; no default.  Must regex match form of: ^(mainnet|preview)[A-Za-z0-9]{32}$
+    ADAWALLET_STATE                          Directory path for adawallet state; defaults to ./state-adawallet
+    BLOCKFROST_API_URL                       Appropriate blockfrost base url; defaults to mainnet.  Must regex match form of: ^https://cardano-(mainnet|preview).blockfrost.io/api$
+    BLOCKFROST_PROJECT_ID                    Appropriate blockfrost project secret; no default.  Must regex match form of: ^(mainnet|preview)[A-Za-z0-9]{32}$
 
 Tips:
     * BLOCKFROST_PROJECT_ID secret env var must be set
@@ -360,7 +365,7 @@ elif arguments['delegate-pool-tx']:
             print("Must include --out-file")
             exit(1)
         in_total, out_total, fee, change = adawallet.delegate_pool_tx(int(arguments["--account"]), arguments["--pool-id"], arguments["--out-file"], int(arguments["--fee"]), ttl=arguments["--ttl"], sign=arguments["--sign"])
-        print(f"Transaction created with delegation certificate with change remaining of {change} at a fee of {fee}")
+        print(f"Transaction created with stake delegation certificate with change remaining of {change} at a fee of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
@@ -377,7 +382,37 @@ elif arguments['bulk-delegate-pool-tx']:
             print("Must include --delegations")
             exit(1)
         in_total, out_total, fee, change = adawallet.bulk_delegate_pool_tx(arguments["--delegations"], arguments["--out-file"], int(arguments["--fee"]), ttl=arguments["--ttl"], sign=arguments["--sign"])
-        print(f"Transactions created with delegation certificates with change remaining of {change} at a fee of {fee}")
+        print(f"Transactions created with stake delegation certificates with change remaining of {change} at a fee of {fee}")
+    else:
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
+        exit(1)
+
+elif arguments['delegate-vote-tx']:
+    if adawallet.wallet_initialized:
+        if not arguments["--account"]:
+            print("Must include --account")
+            exit(1)
+        if not arguments["--voteType"]:
+            print("Must include --voteType")
+            exit(1)
+        if arguments["--voteType"] not in ("drep-key-hash", "drep-script-hash", "drep-verification-key", "drep-verification-key-file", "always-abstain", "always-no-confidence"):
+            print("Must include --voteType as one of the following strings:")
+            print('  "drep-key-hash", "drep-script-hash", "drep-verification-key", "drep-verification-key-file", "always-abstain", "always-no-confidence"')
+            exit(1)
+        if arguments["--voteType"] not in ("always-abstain", "always-no-confidence") and not arguments["--voteTarget"]:
+            print("Must include --voteTarget as one of a: <HASH>, <STRING>, or <FILEPATH>")
+            exit(1)
+        if arguments["--voteType"] in ("always-abstain", "always-no-confidence") and arguments["--voteTarget"]:
+            print('Must not include --voteTarget when --voteType is "always-abstain" or "always-no-confidence"')
+            exit(1)
+        if not arguments["--fee"]:
+            print("Must include --fee")
+            exit(1)
+        if not arguments["--out-file"]:
+            print("Must include --out-file")
+            exit(1)
+        in_total, out_total, fee, change = adawallet.delegate_vote_tx(int(arguments["--account"]), arguments["--voteType"], arguments["--voteTarget"], arguments["--out-file"], int(arguments["--fee"]), ttl=arguments["--ttl"], sign=arguments["--sign"])
+        print(f"Transaction created with vote delegation certificate with change remaining of {change} at a fee of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)

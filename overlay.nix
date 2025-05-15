@@ -78,6 +78,7 @@ in final: prev: {
       cardano-hw-cli
       python3Packages.apsw
       python3Packages.ipython
+      sqlite-interactive
     ];
 
     XDG_DATA_DIRS = with final.lib; concatStringsSep ":" (
