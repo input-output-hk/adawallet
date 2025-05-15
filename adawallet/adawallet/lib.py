@@ -421,6 +421,7 @@ class AdaWallet:
                     stake_skey.write(self.accounts[account]["stake_skey"])
                     stake_skey.flush()
                     signing_args.extend(["--signing-key-file", stake_skey.name])
+
                 cli_args = [
                     "cardano-cli",
                     era,
@@ -469,7 +470,7 @@ class AdaWallet:
                         self.sign_tx(account, tx.name, sign.name, stake=stake)
                         tarout.add(sign.name, txsigned_name)
 
-    def witness_tx(self, account, tx_body, out_file, role):
+    def witness_tx(self, account, tx_body, out_file, role, era="latest"):
         if account not in self.accounts:
             self.import_account(account)
 
@@ -509,6 +510,7 @@ class AdaWallet:
 
                 cli_args = [
                     "cardano-cli",
+                    era,
                     "transaction",
                     "witness",
                     "--tx-body-file",
@@ -517,11 +519,12 @@ class AdaWallet:
                     out_file,
                     *signing_args
                 ]
+
+                if self.debug:
+                    print(f"def witness_tx: {" ".join(cli_args)}")
+
                 p = subprocess.run(cli_args, capture_output=True, text=True)
                 if p.returncode != 0 or not os.path.exists(out_file):
-                    print(" ".join(cli_args))
-                    # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
-                    print(p.stdout)
                     print(p.stderr)
                     raise Exception(f"Unknown error witnessing transaction with account {account}")
             return
@@ -573,8 +576,13 @@ class AdaWallet:
             )
             return { stake_address: int(account_details.withdrawable_amount) }
         except ApiError as e:
-            print(e)
-            exit(1)
+            if e.status_code == 404:
+                print(f"blockfrost: Stake address {stake_address} has no rewards information reported; returning 0")
+                return { stake_address: 0 }
+            else:
+                print(f"Error obtaining rewards for stake address {stake_address}:")
+                print(e)
+                exit(1)
 
     def get_block(self, blockid=None):
         try:
@@ -597,24 +605,28 @@ class AdaWallet:
             utxos.append((row[0], row[1], int(row[3])))
         return utxos
 
-    def stake_registration_tx(self, account, out_file, fee, ttl=None, sign=False, deposit=2000000):
+    def stake_registration_tx(self, account, out_file, fee, ttl=None, sign=False, deposit=2000000, era="latest"):
         with tempfile.NamedTemporaryFile("w+") as stake_registration_certificate, tempfile.NamedTemporaryFile("w+") as vkey:
             vkey.write(self.accounts[account]["stake_vkey"])
             vkey.flush()
             cli_args = [
                 "cardano-cli",
+                era,
                 "stake-address",
                 "registration-certificate",
                 "--stake-verification-key-file",
                 vkey.name,
+                "--key-reg-deposit-amt",
+                str(deposit),
                 "--out-file",
                 stake_registration_certificate.name
             ]
+
+            if self.debug:
+                print(f"def stake_registration_tx: {" ".join(cli_args)}")
+
             p = subprocess.run(cli_args, capture_output=True, text=True)
             if p.returncode != 0:
-                print(" ".join(cli_args))
-                # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
-                print(p.stdout)
                 print(p.stderr)
                 raise Exception(f"Unknown error generating stake registration certificate for account {account}")
             return self.build_tx(account, out_file, fee, certificates=[stake_registration_certificate.name], ttl=ttl, sign=sign, deposit=deposit, stake=True)
@@ -631,7 +643,8 @@ class AdaWallet:
             for account,details in self.accounts.items():
                 with tempfile.NamedTemporaryFile("w+") as tx:
                     result = self.stake_registration_tx(int(account), tx.name, fee, ttl, sign, deposit)
-                    tar.add(tx.name, f"{account}.{suffix}")
+                    if result != (0, 0, 0, 0):
+                        tar.add(tx.name, f"{account}.{suffix}")
                 sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
 
@@ -650,7 +663,8 @@ class AdaWallet:
                 for account,pool_id in delegations.items():
                     with tempfile.NamedTemporaryFile("w+") as tx:
                         result = self.delegate_pool_tx(int(account), pool_id, tx.name, fee, ttl, sign)
-                        tar.add(tx.name, f"{account}.{suffix}")
+                        if result != (0, 0, 0, 0):
+                            tar.add(tx.name, f"{account}.{suffix}")
                     sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
 
@@ -702,14 +716,15 @@ class AdaWallet:
                     sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
 
-    def delegate_pool_tx(self, account, pool_id, out_file, fee, ttl=None, sign=False):
+    def delegate_pool_tx(self, account, pool_id, out_file, fee, ttl=None, sign=False, era="latest"):
         with tempfile.NamedTemporaryFile("w+") as delegation_certificate, tempfile.NamedTemporaryFile("w+") as vkey:
             vkey.write(self.accounts[account]["stake_vkey"])
             vkey.flush()
             cli_args = [
                 "cardano-cli",
+                era,
                 "stake-address",
-                "delegation-certificate",
+                "stake-delegation-certificate",
                 "--stake-verification-key-file",
                 vkey.name,
                 "--stake-pool-id",
@@ -717,11 +732,12 @@ class AdaWallet:
                 "--out-file",
                 delegation_certificate.name
             ]
+
+            if self.debug:
+                print(f"def build_tx: {" ".join(cli_args)}")
+
             p = subprocess.run(cli_args, capture_output=True, text=True)
             if p.returncode != 0:
-                print(" ".join(cli_args))
-                # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
-                print(p.stdout)
                 print(p.stderr)
                 raise Exception(f"Unknown error generating stake delegation certificate for account {account}")
             result = self.build_tx(account, out_file, fee, certificates=[delegation_certificate.name], ttl=ttl, sign=sign, stake=True)
@@ -730,7 +746,11 @@ class AdaWallet:
     def drain_tx(self, account, send_addr, out_file, fee, ttl=None, sign=False):
         stake_address = self.accounts[account]["stake_address"]
         withdrawals = self.get_rewards_for_stake_address(stake_address)
-        if withdrawals != None:
+
+        if self.debug:
+            print(f"def drain_tx: Stake address:rewards are: {withdrawals}")
+
+        if withdrawals[stake_address] != 0:
             return self.build_tx(account, out_file, fee, withdrawals=withdrawals, ttl=ttl, sign=sign, stake=True, change_address=send_addr)
         return None
 
@@ -791,12 +811,13 @@ class AdaWallet:
             if p.returncode != 0:
                 print(p.stderr)
                 raise Exception("Unknown error creating bulk transaction")
+
             if sign:
                 self.sign_tx(account, out_file, out_file, stake=stake)
             return((in_total, out_total, fee, change))
         else:
             print(f"No UTXO for address {account_address} -- skipping tx creation")
-            return(0,0,0,0)
+            return (0,0,0,0)
 
     def get_utxos_for_address(self, address):
         utxos = []
@@ -804,7 +825,7 @@ class AdaWallet:
             bf_utxos = self.blockfrost.address_utxos(address=address)
         except ApiError as e:
             if e.status_code == 404:
-                print(f"Address {address} has no UTXO")
+                print(f"blockfrost: Address {address} has no UTXO")
                 return []
             else:
                 print(f"Error obtaining UTXO for address {address}:")
