@@ -35,26 +35,26 @@ Options:
     -s --start <INT>                Starting account
     -e --end <INT>                  Ending account
     -t --testnet                    Use testnet addresses
-    --accounts-file <FILE_JSON>     Specify an accounts file to perform operations on
-    --snapshot <FILE_JSON>          UTXO snapshot to load into database
-    --delegations <FILE_JSON>       JSON file containing map of accounts to pool ids {"0": "bech32_pool1", ...}
-    --rosetta-url <URL>             DEPRECATED: Rosetta URL [default: https://explorer.cardano.org/rosetta]
     --account <INT>                 Account of wallet to use
-    --fee <INT>                     Fee to use for transaction
-    --deposit <INT>                 Total deposits in transaction [default: 2000000]
-    --amount <INT>                  Amount to send
+    --accounts-file <FILE_JSON>     Specify an accounts file to perform operations on
     --address <BECH32_ADDR>         Address as bech32
-    --pool-id <BECH32_POOL>         Pool id hash as bech32
-    --ttl <INT>                     Absolute slot number time to live for transaction(s)
+    --amount <INT>                  Amount to send
+    --delegations <FILE_JSON>       JSON file containing map of accounts to pool ids {"0": "bech32_pool1", ...}
+    --deposit <INT>                 Total deposits in transaction [default: 2000000]
+    --fee <INT>                     Fee to use for transaction
     --out-file <FILE>               Output file, type varies -- see suffix indicated in the usage section
-    --tx-body-file <FILE_TX>        Body of TX
     --payment                       Witness with payment key
-    --stake                         Sign/Witness with stake key
-    --sign                          Sign Transaction
-    --utxo-file <FILE_JSON>         JSON file containing utxos
-    --transactions-file <FILE_TGZ>  Specify a transactions file to perform operations on; a gzipped tarball is expected
-    --seconds <INT>                 Seconds from now for tx to live [default: 7200]
+    --pool-id <BECH32_POOL>         Pool id hash as bech32
     --recipients <FILE_JSON>        JSON list of funds to send in the form {"bech32_addr_recipient1": lovelace, ...}
+    --rosetta-url <URL>             DEPRECATED: Rosetta URL [default: https://explorer.cardano.org/rosetta]
+    --seconds <INT>                 Seconds from now for tx to live [default: 7200]
+    --sign                          Sign Transaction
+    --snapshot <FILE_JSON>          UTXO snapshot to load into database
+    --stake                         Sign/Witness with stake key
+    --transactions-file <FILE_TGZ>  Specify a transactions file to perform operations on; a gzipped tarball is expected
+    --ttl <INT>                     Absolute slot number time to live for transaction(s)
+    --tx-body-file <FILE_TX>        Body of TX
+    --utxo-file <FILE_JSON>         JSON file containing utxos
 
 Environment Variables:
     ADAWALLET_STATE                 Directory path for adawallet state; defaults to ./state-adawallet
