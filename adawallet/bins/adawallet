@@ -14,17 +14,17 @@ Usage:
     adawallet export-utxos --utxo-file FILE_JSON
     adawallet export-accounts --accounts-file FILE_JSON
     adawallet import-accounts --accounts-file FILE_JSON
-    adawallet bulk-witness-tx --transactions-file FILE_TGZ --out-file FILE_TGZ [--payment | --stake]
-    adawallet bulk-sign-tx --transactions-file FILE_TGZ --out-file FILE_TGZ [--stake]
     adawallet stake-registration-tx --account 0 --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign] [--deposit 2000000]
-    adawallet bulk-stake-registration-tx --fee 210000 --out-file FILE_TGZ [--ttl 5000000] [--sign] [--deposit 2000000]
     adawallet delegate-pool-tx --account 0 --pool-id BECH32_POOL --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
-    adawallet bulk-delegate-pool-tx --delegations FILE_JSON --fee 210000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
-    adawallet drain-tx --account 0 --address BECH32_ADDR --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
-    adawallet bulk-drain-tx --address BECH32_ADDR --fee 210000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
     adawallet send-tx --account 0 --address BECH32_ADDR --amount 5000000 --fee 200000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
     adawallet sign-tx --account 0 --tx-body-file FILE_TX --out-file FILE_TX_SIGNED [--stake]
     adawallet witness-tx --account 0 --tx-body-file FILE_TX --out-file FILE_WITNESS [--payment | --stake]
+    adawallet drain-tx --account 0 --address BECH32_ADDR --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
+    adawallet bulk-stake-registration-tx --fee 210000 --out-file FILE_TGZ [--ttl 5000000] [--sign] [--deposit 2000000]
+    adawallet bulk-delegate-pool-tx --delegations FILE_JSON --fee 210000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
+    adawallet bulk-sign-tx --transactions-file FILE_TGZ --out-file FILE_TGZ [--stake]
+    adawallet bulk-witness-tx --transactions-file FILE_TGZ --out-file FILE_TGZ [--payment | --stake]
+    adawallet bulk-drain-tx --address BECH32_ADDR --fee 210000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
     adawallet bulk-tx --recipients FILE_JSON --account 0 --fee 170000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
     adawallet migrate-wallet --accounts-file FILE_JSON --fee 170000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
     adawallet wipe
