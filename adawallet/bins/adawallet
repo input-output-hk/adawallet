@@ -6,61 +6,60 @@ Usage:
     adawallet init-restore [--testnet] [--rosetta-url URL]
     adawallet init-hardware [--testnet] [--rosetta-url URL]
     adawallet init-read-only [--testnet] [--rosetta-url URL]
-    adawallet import-accounts -s 0 -e 7 [--accounts-file FILE]
-    adawallet load-utxo --snapshot FILE
+    adawallet import-accounts -s 0 -e 7 [--accounts-file FILE_JSON]
+    adawallet load-utxo --snapshot FILE_JSON
     adawallet fetch-utxos
     adawallet get-ttl [--seconds INT]
-    adawallet import-utxos --utxo-file FILE
-    adawallet export-utxos --utxo-file FILE
-    adawallet export-accounts --accounts-file FILE
-    adawallet import-accounts --accounts-file FILE
-    adawallet bulk-witness-tx --transactions-file FILE --out-file FILE [--payment | --stake]
-    adawallet bulk-sign-tx --transactions-file FILE --out-file FILE [--stake]
-    adawallet stake-registration-tx --account 0 --fee 210000 --out-file FILE [--ttl 5000000] [--sign] [--deposit 2000000]
-    adawallet bulk-stake-registration-tx --fee 210000 --out-file FILE [--ttl 5000000] [--sign] [--deposit 2000000]
-    adawallet delegate-pool-tx --account 0 --pool-id pool1y25deq9kldy9y9gfvrpw8zt05zsrfx84zjhugaxrx9ftvwdpua2 --fee 210000 --out-file FILE [--ttl 5000000] [--sign]
-    adawallet bulk-delegate-pool-tx --delegations FILE --fee 210000 --out-file FILE [--ttl 5000000] [--sign]
-    adawallet drain-tx --account 0 --fee 210000 --address STRING --out-file FILE [--ttl 5000000] [--sign]
-    adawallet bulk-drain-tx --address STRING --fee 210000 --out-file FILE [--ttl 5000000] [--sign]
-    adawallet send-tx --account 0 --address addr1q8ugkffj2mvs9stmcjxcsm3tfxpsn9dzt5whyq9u4vjq4cgzft2upy983gut8q23q3c92h60r9nvxs267acrma9z9pmst5p439 --amount 5000000 --fee 200000 --out-file FILE [--ttl 5000000] [--sign]
-    adawallet sign-tx --account 0 --tx-body-file FILE --out-file FILE [--stake]
-    adawallet witness-tx --account 0 --tx-body-file FILE --out-file FILE [--payment | --stake]
-    adawallet bulk-tx --recipients FILE --account 0 --fee 170000 --out-file FILE [--ttl 5000000] [--sign]
-    adawallet migrate-wallet --accounts-file FILE --fee 170000 --out-file FILE [--ttl 5000000] [--sign]
+    adawallet import-utxos --utxo-file FILE_JSON
+    adawallet export-utxos --utxo-file FILE_JSON
+    adawallet export-accounts --accounts-file FILE_JSON
+    adawallet import-accounts --accounts-file FILE_JSON
+    adawallet bulk-witness-tx --transactions-file FILE_TGZ --out-file FILE_TGZ [--payment | --stake]
+    adawallet bulk-sign-tx --transactions-file FILE_TGZ --out-file FILE_TGZ [--stake]
+    adawallet stake-registration-tx --account 0 --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign] [--deposit 2000000]
+    adawallet bulk-stake-registration-tx --fee 210000 --out-file FILE_TGZ [--ttl 5000000] [--sign] [--deposit 2000000]
+    adawallet delegate-pool-tx --account 0 --pool-id BECH32_POOL --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
+    adawallet bulk-delegate-pool-tx --delegations FILE_JSON --fee 210000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
+    adawallet drain-tx --account 0 --address BECH32_ADDR --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
+    adawallet bulk-drain-tx --address BECH32_ADDR --fee 210000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
+    adawallet send-tx --account 0 --address BECH32_ADDR --amount 5000000 --fee 200000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
+    adawallet sign-tx --account 0 --tx-body-file FILE_TX --out-file FILE_TX_SIGNED [--stake]
+    adawallet witness-tx --account 0 --tx-body-file FILE_TX --out-file FILE_WITNESS [--payment | --stake]
+    adawallet bulk-tx --recipients FILE_JSON --account 0 --fee 170000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
+    adawallet migrate-wallet --accounts-file FILE_JSON --fee 170000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
     adawallet wipe
 
 Options:
-    -h --help                   Show this screen
-    --version                   Show version
-    -s --start <INT>            Starting account
-    -e --end <INT>              Ending account
-    -t --testnet                Use testnet addresses
-    --accounts-file <FILE>      Specify an accounts file to perform operations on
-    --snapshot <FILE>           UTXO snapshot to load into database
-    --pool-transactions <FILE>  Tarball containing transactions with pool registration certificates
-    --delegations <FILE>        JSON file containing map of accounts to pool ids
-    --rosetta-url <URL>         DEPRECATED: Rosetta URL [default: https://explorer.cardano.org/rosetta]
-    --account <INT>             Account of wallet to use
-    --fee <INT>                 Fee to use for transaction
-    --deposit <INT>             Total deposits in transaction [default: 2000000]
-    --amount <INT>              Amount to send
-    --address <STRING>          Receiving address
-    --pool-id <STRING>          pool id hash
-    --ttl <INT>                 Time to live for transaction
-    --out-file <FILE>           Output file
-    --tx-body-file <FILE>       Body of TX
-    --payment                   Witness with payment key
-    --stake                     Sign/Witness with stake key
-    --sign                      Sign Transaction
-    --utxo-file <FILE>          JSON file containing utxos
-    --transactions-file <FILE>  Specify a transactions file to perform operations on
-    --seconds <INT>             Seconds from now for tx to live [default: 7200]
-    --recipients <FILE>         JSON list of funds to send
+    -h --help                       Show this screen
+    --version                       Show version
+    -s --start <INT>                Starting account
+    -e --end <INT>                  Ending account
+    -t --testnet                    Use testnet addresses
+    --accounts-file <FILE_JSON>     Specify an accounts file to perform operations on
+    --snapshot <FILE_JSON>          UTXO snapshot to load into database
+    --delegations <FILE_JSON>       JSON file containing map of accounts to pool ids {"0": "bech32_pool1", ...}
+    --rosetta-url <URL>             DEPRECATED: Rosetta URL [default: https://explorer.cardano.org/rosetta]
+    --account <INT>                 Account of wallet to use
+    --fee <INT>                     Fee to use for transaction
+    --deposit <INT>                 Total deposits in transaction [default: 2000000]
+    --amount <INT>                  Amount to send
+    --address <BECH32_ADDR>         Address as bech32
+    --pool-id <BECH32_POOL>         Pool id hash as bech32
+    --ttl <INT>                     Absolute slot number time to live for transaction(s)
+    --out-file <FILE>               Output file, type varies -- see suffix indicated in the usage section
+    --tx-body-file <FILE_TX>        Body of TX
+    --payment                       Witness with payment key
+    --stake                         Sign/Witness with stake key
+    --sign                          Sign Transaction
+    --utxo-file <FILE_JSON>         JSON file containing utxos
+    --transactions-file <FILE_TGZ>  Specify a transactions file to perform operations on; a gzipped tarball is expected
+    --seconds <INT>                 Seconds from now for tx to live [default: 7200]
+    --recipients <FILE_JSON>        JSON list of funds to send in the form {"bech32_addr_recipient1": lovelace, ...}
 
 Environment Variables:
-    ADAWALLET_STATE             Directory path for adawallet state; defaults to ./state-adawallet
-    BLOCKFROST_API_URL          Appropriate blockfrost base url; defaults to mainnet.  Must regex match form of: ^https://cardano-(mainnet|preview).blockfrost.io/api$
-    BLOCKFROST_PROJECT_ID       Appropriate blockfrost project secret; no default.  Must regex match form of: ^(mainnet|preview)[A-Za-z0-9]{32}$
+    ADAWALLET_STATE                 Directory path for adawallet state; defaults to ./state-adawallet
+    BLOCKFROST_API_URL              Appropriate blockfrost base url; defaults to mainnet.  Must regex match form of: ^https://cardano-(mainnet|preview).blockfrost.io/api$
+    BLOCKFROST_PROJECT_ID           Appropriate blockfrost project secret; no default.  Must regex match form of: ^(mainnet|preview)[A-Za-z0-9]{32}$
 
 Tips:
     * BLOCKFROST_PROJECT_ID secret env var must be set
