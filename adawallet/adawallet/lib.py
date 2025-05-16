@@ -681,9 +681,8 @@ class AdaWallet:
                 for account in self.accounts:
                     with tempfile.NamedTemporaryFile("w+") as tx:
                         result = self.drain_tx(int(account), send_addr, tx.name, fee, ttl, sign)
-                        if result == None:
-                            continue
-                        tar.add(tx.name, f"{account}.{suffix}")
+                        if result != (0, 0, 0, 0):
+                            tar.add(tx.name, f"{account}.{suffix}")
                     sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
 
@@ -777,9 +776,9 @@ class AdaWallet:
         if self.debug:
             print(f"def drain_tx: Stake address:rewards are: {withdrawals}")
 
-        if withdrawals[stake_address] != 0:
-            return self.build_tx(account, out_file, fee, withdrawals=withdrawals, ttl=ttl, sign=sign, stake=True, change_address=send_addr)
-        return None
+        if withdrawals[stake_address] == 0:
+            print(f"No rewards for address {stake_address} -- drain tx may still be created if account payment addr UTXO are present")
+        return self.build_tx(account, out_file, fee, withdrawals=withdrawals, ttl=ttl, sign=sign, stake=True, change_address=send_addr)
 
     def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False, change_address=None, era="latest"):
         account_address = self.accounts[account]["address"]
