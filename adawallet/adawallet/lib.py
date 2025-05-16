@@ -534,11 +534,11 @@ class AdaWallet:
         cursor = self.db.cursor()
         cursor.execute("delete from utxo")
 
-    def update_utxos_for_accounts(self, reload_state=False):
+    def update_utxos_for_accounts(self, filter_min, reload_state=False):
         self.clear_utxo_table()
         cursor = self.db.cursor()
         for account,details in self.accounts.items():
-            utxos = self.get_utxos_for_address(details["address"])
+            utxos = self.get_utxos_for_address(details["address"], filter_min)
             for utxo in utxos:
                 cursor.execute("insert into utxo values(?,?,?,?)", utxo)
         if reload_state:
@@ -845,8 +845,12 @@ class AdaWallet:
             print(f"No UTXO for address {account_address} -- skipping tx creation")
             return (0,0,0,0)
 
-    def get_utxos_for_address(self, address):
+    def get_utxos_for_address(self, address, filter_min):
+        utxo_count = 0
+        utxo_count_nt = 0
+        utxo_count_filter_min = 0
         utxos = []
+
         try:
             bf_utxos = self.blockfrost.address_utxos(address=address)
         except ApiError as e:
@@ -857,12 +861,20 @@ class AdaWallet:
                 print(f"Error obtaining UTXO for address {address}:")
                 print(e)
                 exit(1)
+
         for utxo in bf_utxos:
+            utxo_count += 1
             # TODO: this is a hack assuming utxo only has lovelace if amount == 1
             if len(utxo.amount) == 1:
-                amount = utxo.amount[0].quantity
-                txid = utxo.tx_hash
-                index = utxo.tx_index
-                utxos.append((txid, index, address, amount))
-        print(f"Address {address} has {len(utxos)} UTXO.")
+                if int(utxo.amount[0].quantity) > filter_min:
+                    amount = utxo.amount[0].quantity
+                    txid = utxo.tx_hash
+                    index = utxo.tx_index
+                    utxos.append((txid, index, address, amount))
+                else:
+                    utxo_count_filter_min += 1
+            else:
+                utxo_count_nt += 1
+
+        print(f"Address {address} has {len(utxos)} UTXO imported; Total parsed: {utxo_count}, NT filtered: {utxo_count_nt}, Min filtered: {utxo_count_filter_min}")
         return utxos

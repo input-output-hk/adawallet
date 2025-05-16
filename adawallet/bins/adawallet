@@ -9,7 +9,7 @@ Usage:
     adawallet import-accounts -s 0 -e 7 [--accounts-file FILE_JSON]
     adawallet import-accounts --accounts-file FILE_JSON
     adawallet import-utxos --utxo-file FILE_JSON
-    adawallet fetch-utxos
+    adawallet fetch-utxos [--filter-min 3000000]
     adawallet load-utxo --snapshot FILE_JSON
     adawallet get-ttl [--seconds INT]
     adawallet export-accounts --accounts-file FILE_JSON
@@ -44,6 +44,7 @@ Options:
     --deposit <INT>                          Total deposits in transaction [default: 2000000]
     --drep-id <BECH32_POOL>                  Drep id hash as bech32
     --fee <INT>                              Fee to use for transaction
+    --filter-min <INT>                       Apply a filter predicate such that UTXO larger than <INT> lovelace are imported
     --out-file <FILE>                        Output file, type varies -- see suffix indicated in the usage section
     --payment                                Witness with payment key
     --pool-id <BECH32_POOL>                  Pool id hash as bech32
@@ -73,6 +74,7 @@ Tips:
     * Exporting accounts will not export secrets
     * Importing accounts from exported accounts json file without secrets with not regenerate secrets
     * Use import-accounts with start and end options on fresh adawallet state for account secrets regeneration
+    * Fetch-utxos subcommand will only populate UTXO without native tokens
     * Rosetta usage is deprecated
 """
 
@@ -215,7 +217,8 @@ elif arguments['bulk-sign-tx']:
 
 elif arguments['fetch-utxos']:
     if adawallet.wallet_initialized:
-        adawallet.update_utxos_for_accounts()
+        filter_min = int(arguments["--filter-min"]) if arguments["--filter-min"] is not None else 0
+        adawallet.update_utxos_for_accounts(filter_min)
         print("All account utxos updated")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
