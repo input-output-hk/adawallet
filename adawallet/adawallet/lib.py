@@ -771,21 +771,39 @@ class AdaWallet:
 
     def drain_tx(self, account, send_addr, out_file, fee, ttl=None, sign=False):
         stake_address = self.accounts[account]["stake_address"]
-        withdrawals = self.get_rewards_for_stake_address(stake_address)
+
+        if os.getenv('BLOCKFROST_DISABLE', 'False') == "True":
+            rewards = os.getenv(f"ADAWALLET_ACCOUNT_{account}_STAKE_REWARDS")
+            if rewards is None:
+                print(f"Blockfrost is disabled, unable to fetch rewards.  Please set account {account} stake rewards via env var: ADAWALLET_ACCOUNT_{account}_STAKE_REWARDS")
+                exit(1)
+            else:
+                print(f"Blockfrost is disabled, setting account {account} stake rewards from env var: ADAWALLET_ACCOUNT_{account}_STAKE_REWARDS")
+                withdrawals = { stake_address: int(os.getenv(f"ADAWALLET_ACCOUNT_{account}_STAKE_REWARDS", "0")) }
+        else:
+            withdrawals = self.get_rewards_for_stake_address(stake_address)
 
         if self.debug:
             print(f"def drain_tx: Stake address:rewards are: {withdrawals}")
 
         if withdrawals[stake_address] == 0:
-            print(f"No rewards for address {stake_address} -- drain tx may still be created if account payment addr UTXO are present")
+            print(f"No rewards for address {stake_address} -- drain tx may still be created if account payment address UTXO are present")
+            withdrawals = {}
+
         return self.build_tx(account, out_file, fee, withdrawals=withdrawals, ttl=ttl, sign=sign, stake=True, change_address=send_addr)
 
     def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False, change_address=None, era="latest"):
         account_address = self.accounts[account]["address"]
+
         if change_address == None:
             change_address = account_address
+
         if not ttl:
+            if os.getenv('BLOCKFROST_DISABLE', 'False') == "True":
+                print(f"Blockfrost is disabled.  Please set ttl to an absolute slot height explicitly using: `--ttl <INT>`")
+                exit(1)
             ttl = self.get_slot_tip() + 7200
+
         out_total = 0
         in_total = 0
 
@@ -850,6 +868,10 @@ class AdaWallet:
         utxo_count_nt = 0
         utxo_count_filter_min = 0
         utxos = []
+
+        if os.getenv('BLOCKFROST_DISABLE', 'False') == "True":
+            print(f"Blockfrost is disabled.  Please use `adawallet import-utxos` sub-command to fetch UTXO.")
+            exit(1)
 
         try:
             bf_utxos = self.blockfrost.address_utxos(address=address)

@@ -65,6 +65,7 @@ Options:
 Environment Variables:
     ADAWALLET_STATE                          Directory path for adawallet state; defaults to ./state-adawallet
     BLOCKFROST_API_URL                       Appropriate blockfrost base url; defaults to mainnet.  Must regex match form of: ^https://cardano-(mainnet|preview).blockfrost.io/api$
+    BLOCKFROST_DISABLE                       To work with adawallet on local testnets where blockfrost is not available, blockfrost can be disabled by setting this bool to `True`
     BLOCKFROST_PROJECT_ID                    Appropriate blockfrost project secret; no default.  Must regex match form of: ^(mainnet|preview)[A-Za-z0-9]{32}$
 
 Tips:
@@ -74,7 +75,7 @@ Tips:
     * Exporting accounts will not export secrets
     * Importing accounts from exported accounts json file without secrets with not regenerate secrets
     * Use import-accounts with start and end options on fresh adawallet state for account secrets regeneration
-    * Fetch-utxos subcommand will only populate UTXO without native tokens
+    * Fetch-utxos sub-command will only populate UTXO without native tokens
     * Rosetta usage is deprecated
 """
 
@@ -89,7 +90,7 @@ if len(sys.argv) == 1:
 
 arguments = docopt(__doc__, version='Ada Wallet 1.0')
 state_dir = os.getenv('ADAWALLET_STATE', './state-adawallet')
-debug = "True" == os.getenv('DEBUG', 'False')
+debug = os.getenv('DEBUG', 'False') == "True"
 
 adawallet = AdaWallet(state_dir, debug)
 if arguments['wipe']:
@@ -266,6 +267,9 @@ elif arguments['import-accounts']:
 
 elif arguments['get-ttl']:
     if adawallet.wallet_initialized:
+        if os.getenv('BLOCKFROST_DISABLE', 'False') == "True":
+            print(f"Blockfrost is disabled, get-ttl unavailable.  Instead set ttl to an absolute slot height explicitly using `--ttl <INT>` for adawallet sub-commands.")
+            exit(1)
         tip = int(adawallet.get_slot_tip())
         ttl = tip + int(arguments['--seconds'])
         print(ttl)
