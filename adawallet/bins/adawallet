@@ -6,7 +6,7 @@ Usage:
     adawallet init-hardware [--testnet] [--rosetta-url URL]
     adawallet init-read-only [--testnet] [--rosetta-url URL]
     adawallet init-restore [--testnet] [--rosetta-url URL]
-    adawallet import-accounts -s 0 -e 7 [--accounts-file FILE_JSON]
+    adawallet import-accounts -s 0 -e 7
     adawallet import-accounts --accounts-file FILE_JSON
     adawallet import-utxos --utxo-file FILE_JSON
     adawallet fetch-utxos [--filter-min 3000000]
@@ -48,7 +48,7 @@ Options:
     --out-file <FILE>                        Output file, type varies -- see suffix indicated in the usage section
     --payment                                Witness with payment key
     --pool-id <BECH32_POOL>                  Pool id hash as bech32
-    --recipients <FILE_JSON>                 JSON list of funds to send in the form {"$bech32_addr_recipient": $lovelace, ...}
+    --recipients <FILE_JSON>                 JSON file containing map of addrs to funds to send {"$bech32_addr_recipient": $lovelace, ...}
     --rosetta-url <URL>                      DEPRECATED: Rosetta URL [default: https://explorer.cardano.org/rosetta]
     --seconds <INT>                          Seconds from now for tx to live [default: 7200]
     --sign                                   Sign Transaction
