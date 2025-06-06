@@ -251,7 +251,6 @@ class AdaWallet:
 
             cli_args = [
                 "cardano-hw-cli",
-                "shelley",
                 "address",
                 "key-gen",
                 *account_args
@@ -282,7 +281,6 @@ class AdaWallet:
             with tempfile.NamedTemporaryFile("w+") as vkey, tempfile.NamedTemporaryFile("w+") as hws:
                 cli_args = [
                     "cardano-hw-cli",
-                    "shelley",
                     "address",
                     "key-gen",
                     "--path",
@@ -363,8 +361,15 @@ class AdaWallet:
             self.import_account(account)
 
         if self.hardware_wallet:
-            with tempfile.NamedTemporaryFile("w+") as payment_hws, tempfile.NamedTemporaryFile("w+") as stake_hws, tempfile.NamedTemporaryFile("w+") as tx_body_formatted:
+            with (
+                tempfile.NamedTemporaryFile("w+") as payment_hws,
+                tempfile.NamedTemporaryFile("w+") as stake_hws,
+                tempfile.NamedTemporaryFile("w+") as tx_body_formatted,
+                tempfile.NamedTemporaryFile("w+") as witness1,
+                tempfile.NamedTemporaryFile("w+") as witness2
+            ):
                 signing_args = []
+                assembly_args = []
                 payment_hws.write(self.accounts[account]["payment_skey"])
                 payment_hws.flush()
                 signing_args.extend(["--hw-signing-file", payment_hws.name])
@@ -372,8 +377,8 @@ class AdaWallet:
                 cli_args = [
                     "cardano-hw-cli",
                     "transaction",
-                    "transform-raw",
-                    "--tx-body-file",
+                    "transform",
+                    "--tx-file",
                     tx_body,
                     "--out-file",
                     tx_body_formatted.name
@@ -381,33 +386,52 @@ class AdaWallet:
                 p = subprocess.run(cli_args, capture_output=True, text=True)
                 if p.returncode != 0 or not os.path.exists(tx_body_formatted.name):
                     print(" ".join(cli_args))
-                    # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
-                    print(p.stdout)
                     print(p.stderr)
                     raise Exception(f"Unknown error signing transaction with account {account}")
                 if stake:
                     stake_hws.write(self.accounts[account]["stake_skey"])
                     stake_hws.flush()
-                    signing_args.extend(["--hw-signing-file", stake_hws.name])
+                    signing_args.extend([
+                        "--hw-signing-file", stake_hws.name,
+                        "--out-file", witness2.name
+                    ])
+                    assembly_args.extend(["--witness-file", witness2.name])
                 cli_args = [
                     "cardano-hw-cli",
-                    "shelley",
                     "transaction",
-                    "sign",
+                    "witness",
                     *self.magic_args,
-                    "--tx-body-file",
+                    "--tx-file",
                     tx_body_formatted.name,
                     "--out-file",
-                    out_file,
+                    witness1.name,
                     *signing_args
                 ]
                 p = subprocess.run(cli_args, capture_output=True, text=True)
-                if p.returncode != 0 or not os.path.exists(out_file):
+                if p.returncode != 0:
                     print(" ".join(cli_args))
-                    # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
-                    print(p.stdout)
                     print(p.stderr)
                     raise Exception(f"Unknown error signing transaction with account {account}")
+
+                cli_args = [
+                    "cardano-cli",
+                    era,
+                    "transaction",
+                    "assemble",
+                    "--tx-body-file",
+                    tx_body,
+                    "--witness-file",
+                    witness1.name,
+                    "--out-file",
+                    out_file,
+                    *assembly_args
+                ]
+
+                p = subprocess.run(cli_args, capture_output=True, text=True)
+                if p.returncode != 0 or not os.path.exists(out_file):
+                    print(" ".join(cli_args))
+                    print(p.stderr)
+                    raise Exception(f"Unknown error assembling transaction with account {account}")
             return
         elif self.accounts[account]["payment_skey"]:
             with tempfile.NamedTemporaryFile("w+") as payment_skey, tempfile.NamedTemporaryFile("w+") as stake_skey:
@@ -483,11 +507,10 @@ class AdaWallet:
 
                 cli_args = [
                     "cardano-hw-cli",
-                    "shelley",
                     "transaction",
                     "witness",
                     *self.magic_args,
-                    "--tx-body-file",
+                    "--tx-file",
                     tx_body,
                     "--out-file",
                     out_file,
@@ -496,8 +519,6 @@ class AdaWallet:
                 p = subprocess.run(cli_args, capture_output=True, text=True)
                 if p.returncode != 0 or not os.path.exists(out_file):
                     print(" ".join(cli_args))
-                    # TODO: cardano-hw-cli prints an error to stdout. Remove when fixed
-                    print(p.stdout)
                     print(p.stderr)
                     raise Exception(f"Unknown error witnessing transaction with account {account}")
             return
