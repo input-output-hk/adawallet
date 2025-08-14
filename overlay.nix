@@ -1,5 +1,5 @@
 { inputs, self }: final: prev: {
-  inherit (inputs.cardano-parts.packages.x86_64-linux) cardano-node cardano-cli bech32 cardano-address;
+  inherit (inputs.cardano-parts.packages.x86_64-linux) cardano-node cardano-cli cardano-signer bech32 cardano-address;
 
   adawallet = final.python3Packages.buildPythonApplication {
     pname = "adawallet";
@@ -74,6 +74,7 @@
       cardano-cli
       cardano-node
       cardano-hw-cli
+      cardano-signer
       python3Packages.apsw
       python3Packages.ipython
       sqlite-interactive

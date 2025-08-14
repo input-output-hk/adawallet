@@ -9,7 +9,7 @@
 
     systems.url = "github:nix-systems/x86_64-linux";
 
-    cardano-parts.url = "github:input-output-hk/cardano-parts/v2025-08-05";
+    cardano-parts.url = "github:input-output-hk/cardano-parts/v2025-08-14";
 
     nixpkgs.follows = "cardano-parts/nixpkgs";
   };

@@ -82,11 +82,11 @@
     },
     "capkgs": {
       "locked": {
-        "lastModified": 1753194948,
-        "narHash": "sha256-c2u8JzI+KPquczoAZ0mlOtRm6q+himwvQod2k1Vpl/k=",
+        "lastModified": 1755190706,
+        "narHash": "sha256-/+6TQESSFiqoyT6LfBbcij0HeyCAMD9+AndDJHGKSFM=",
         "owner": "input-output-hk",
         "repo": "capkgs",
-        "rev": "af0077b030b1e5e927e7d7ff27a80dadb59f0fb1",
+        "rev": "b2cd2938011557e0c7e767dc112510acdaed2b16",
         "type": "github"
       },
       "original": {
@@ -263,16 +263,16 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1754438923,
-        "narHash": "sha256-FH2HlXd9TQBKWs10HbAr11b1JYwPrxve1j/Go17pBU8=",
+        "lastModified": 1755194623,
+        "narHash": "sha256-K4xPnExSjIL2YaUiQm927FmuNniP85VqaZhyb5qS4QM=",
         "owner": "input-output-hk",
         "repo": "cardano-parts",
-        "rev": "777f372b512004b4e3571e24be6f85f2953adcf7",
+        "rev": "87b67543e00e61a7697ad87f4833b272edaa9bbb",
         "type": "github"
       },
       "original": {
         "owner": "input-output-hk",
-        "ref": "v2025-08-05",
+        "ref": "v2025-08-14",
         "repo": "cardano-parts",
         "type": "github"
       }
