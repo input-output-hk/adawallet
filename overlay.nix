@@ -1,7 +1,4 @@
-{ inputs, self }:
-let
-  nodePkgs = inputs.nodePkgs.legacyPackages.x86_64-linux;
-in final: prev: {
+{ inputs, self }: final: prev: {
   inherit (inputs.cardano-parts.packages.x86_64-linux) cardano-node cardano-cli bech32 cardano-address;
 
   adawallet = final.python3Packages.buildPythonApplication {
@@ -35,15 +32,16 @@ in final: prev: {
     };
   };
 
-  # nodePkgs provides node 18.7.0 explicitly required by cardano-hw-cli
-  cardano-hw-cli = nodePkgs.callPackage ./cardano-hw-cli {};
+  cardano-hw-cli = final.callPackage ./cardano-hw-cli {};
 
   docopt_completion = final.python3Packages.buildPythonApplication rec {
     pname = "infi.docopt_completion";
     version = "0.2.9";
+
     propagatedBuildInputs = [
       final.python3Packages.docopt
     ];
+
     src = final.python3Packages.fetchPypi {
       inherit pname version;
       sha256 = "sha256-x+ZXVNQ9NrIM1jZGDDx3ZgeOUv7NqqZLoZmiaB5KbOI=";
@@ -68,7 +66,7 @@ in final: prev: {
     doCheck = false;
   };
 
-  devShell = prev.mkShell rec {
+  devShellAdawallet = prev.mkShell {
     nativeBuildInputs = with final; [
       adawallet
       blockfrost
@@ -81,17 +79,24 @@ in final: prev: {
       sqlite-interactive
     ];
 
-    XDG_DATA_DIRS = with final.lib; concatStringsSep ":" (
-      [(builtins.getEnv "XDG_DATA_DIRS")] ++
-      (filter
-        (share: builtins.pathExists (share + "/bash-completion"))
-        (map (p: p + "/share") nativeBuildInputs))
-    );
-
     shellHook = ''
       echo "Ada Wallet Shell Tools" \
       | ${final.figlet}/bin/figlet -f banner -c \
-      | ${final.lolcat}/bin/lolcat
+      | ${final.clolcat}/bin/clolcat
+    '';
+    };
+
+  devShellYarn = prev.mkShell {
+    nativeBuildInputs = with final; [
+      nodejs
+      yarn
+      yarn2nix
+    ];
+
+    shellHook = ''
+      echo "Ada Wallet Yarn Tools" \
+      | ${final.figlet}/bin/figlet -f banner -c \
+      | ${final.clolcat}/bin/clolcat
     '';
     };
 }

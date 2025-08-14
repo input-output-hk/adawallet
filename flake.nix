@@ -12,9 +12,6 @@
     cardano-parts.url = "github:input-output-hk/cardano-parts/v2025-08-05";
 
     nixpkgs.follows = "cardano-parts/nixpkgs";
-
-    # Nixpkgs w/ nodejs 18.7.0, explicitly required by cardano-hw-cli
-    nodePkgs.url = "github:NixOS/nixpkgs/7753a94a35438b73a1aa1d8aca233753367ff4d6";
   };
 
   outputs = {
@@ -22,7 +19,6 @@
     flake-utils,
     nixpkgs,
     cardano-parts,
-    nodePkgs,
     ...
   } @ inputs: let
     overlay = import ./overlay.nix {inherit inputs self;};
@@ -35,7 +31,12 @@
     in rec {
       checks = {};
 
-      devShells.default = pkgs.devShell;
+      devShells = with pkgs; rec {
+        default = adawallet;
+
+        adawallet = devShellAdawallet;
+        yarn = devShellYarn;
+      };
 
       legacyPackages = pkgs;
 

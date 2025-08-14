@@ -787,22 +787,6 @@
         "type": "github"
       }
     },
-    "nodePkgs": {
-      "locked": {
-        "lastModified": 1660969200,
-        "narHash": "sha256-ig6VppwvOLa/XdlO5zeLHZQ2uGgOr1IEHG1pMZmQg8s=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "7753a94a35438b73a1aa1d8aca233753367ff4d6",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "7753a94a35438b73a1aa1d8aca233753367ff4d6",
-        "type": "github"
-      }
-    },
     "opentofu-registry": {
       "flake": false,
       "locked": {
@@ -842,7 +826,6 @@
           "cardano-parts",
           "nixpkgs"
         ],
-        "nodePkgs": "nodePkgs",
         "systems": "systems_2"
       }
     },
