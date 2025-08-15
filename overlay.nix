@@ -67,7 +67,7 @@
   };
 
   devShellAdawallet = prev.mkShell {
-    nativeBuildInputs = with final; [
+    packages = with final; [
       adawallet
       blockfrost
       cardano-address
@@ -88,7 +88,7 @@
     };
 
   devShellYarn = prev.mkShell {
-    nativeBuildInputs = with final; [
+    packages = with final; [
       nodejs
       yarn
       yarn2nix

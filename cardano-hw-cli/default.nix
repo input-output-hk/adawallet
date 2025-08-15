@@ -6,7 +6,7 @@
 # straight-forward and doesn't have any CVEs the old yarn2nix modules carry
 # with the included yarn.lock file.
 {pkgs}: let
-  inherit (pkgs.lib) licenses optionalString;
+  inherit (pkgs.lib) licenses;
 
   name = "cardano-hw-cli";
   hwCliVersion = "1.18.2";
@@ -54,6 +54,12 @@ in
       '';
 
       postInstall = ''
+        # Enable bash auto-completion
+        mkdir -p "$out/share/bash-completion/completions"
+        cp \
+          "$out/libexec/${pname}/deps/${pname}/scripts/autocomplete.sh" \
+          "$out/share/bash-completion/completions/cardano-hw-cli"
+
         # Make an executable wrapper at the standard nix closure bin path
         makeWrapper ${nodejs}/bin/node "$out/bin/${pname}" \
           --set NODE_PATH "$out/libexec/${pname}/node_modules" \
