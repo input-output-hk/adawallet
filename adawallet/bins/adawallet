@@ -18,6 +18,7 @@ Usage:
     adawallet delegate-pool-tx --account 0 --pool-id BECH32_POOL --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
     adawallet delegate-vote-tx --account 0 --voteType VOTE_TYPE [--voteTarget VOTE_TARGET] --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
     adawallet send-tx --account 0 --address BECH32_ADDR --amount 5000000 --fee 200000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
+    adawallet sign-msg --account 0 --msg-file FILE_MSG --out-file FILE_MSG_SIGNED_JSON [--stake] [--hashed]
     adawallet sign-tx --account 0 --tx-body-file FILE_TX --out-file FILE_TX_SIGNED [--stake]
     adawallet witness-tx --account 0 --tx-body-file FILE_TX --out-file FILE_WITNESS [--payment | --stake]
     adawallet drain-tx --account 0 --address BECH32_ADDR --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
@@ -45,6 +46,8 @@ Options:
     --drep-id <BECH32_POOL>                  Drep id hash as bech32
     --fee <INT>                              Fee to use for transaction
     --filter-min <INT>                       Apply a filter predicate such that UTXO larger than <INT> lovelace are imported
+    --hashed                                 Hash a message prior to signing per CIP-8
+    --msg-file <FILE_MSG>                    A file containing a message to be signed
     --out-file <FILE>                        Output file, type varies -- see suffix indicated in the usage section
     --payment                                Witness with payment key
     --pool-id <BECH32_POOL>                  Pool id hash as bech32
@@ -136,6 +139,20 @@ elif arguments['import-accounts']:
             adawallet.import_accounts(int(arguments["--start"]), int(arguments["--end"]))
         if arguments["--accounts-file"]:
             adawallet.import_accounts(accounts_file=arguments["--accounts-file"])
+        exit(0)
+    else:
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
+        exit(1)
+
+elif arguments['sign-msg']:
+    if adawallet.wallet_initialized:
+        if not arguments["--account"]:
+            print("Must specify account to sign the message with")
+            exit(1)
+        if not (arguments["--out-file"] and arguments["--msg-file"]):
+            print("Must include --msg-file and --out-file flags")
+            exit(1)
+        adawallet.sign_msg(int(arguments["--account"]), arguments["--msg-file"], arguments["--out-file"], arguments["--stake"], arguments["--hashed"])
         exit(0)
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
