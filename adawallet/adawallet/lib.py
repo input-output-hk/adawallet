@@ -193,7 +193,7 @@ class AdaWallet:
         cursor = self.db.cursor()
         cursor.execute("insert into accounts values(?,?,?,?,?,?,?)", account_keys)
 
-    def build_address(self, payment_vkey, stake_vkey):
+    def build_address(self, payment_vkey, stake_vkey, era="latest"):
         with tempfile.NamedTemporaryFile("w+") as payment, tempfile.NamedTemporaryFile("w+") as stake:
             payment.write(payment_vkey)
             payment.flush()
@@ -201,6 +201,7 @@ class AdaWallet:
             stake.flush()
             cli_args = [
                 "cardano-cli",
+                era,
                 "address",
                 "build",
                 *self.magic_args,
@@ -213,6 +214,26 @@ class AdaWallet:
             if p.returncode != 0:
                 print(p.stderr)
                 raise Exception(f"Unknown error building address")
+        return p.stdout.rstrip()
+
+    def build_payment_address(self, payment_vkey, era="latest"):
+        with tempfile.NamedTemporaryFile("w+") as payment:
+            payment.write(payment_vkey)
+            payment.flush()
+            cli_args = [
+                "cardano-cli",
+                era,
+                "address",
+                "build",
+                *self.magic_args,
+                "--payment-verification-key-file",
+                payment.name,
+            ]
+            p = subprocess.run(cli_args, capture_output=True, text=True)
+            if p.returncode != 0:
+                print(" ".join("cli_args"))
+                print(p.stderr)
+                raise Exception(f"Unknown error building payment address")
         return p.stdout.rstrip()
 
     def build_stake_address(self, stake_vkey, era="latest"):
@@ -355,6 +376,104 @@ class AdaWallet:
                 skey_contents = skey.read()
                 vkey_contents = vkey.read()
             return (vkey_contents, skey_contents)
+
+    def sign_msg(self, account, msg_file, out_file, stake=False, hashed=False, era="latest"):
+        if account not in self.accounts:
+            self.import_account(account)
+
+        signing_args = []
+        if hashed:
+            signing_args.extend(["--hashed"])
+
+        if self.hardware_wallet:
+            with (
+                tempfile.NamedTemporaryFile("w+") as payment_hws,
+                tempfile.NamedTemporaryFile("w+") as stake_hws,
+                open(msg_file, "rb") as msg_file_rb,
+            ):
+                msg_hex = msg_file_rb.read().hex()
+
+                # Messages are expected to be signed with only one of a payment or stake key
+                if stake:
+                    stake_hws.write(self.accounts[account]["stake_skey"])
+                    stake_hws.flush()
+                    secret_key_hws = stake_hws.name
+                    address = self.accounts[account]["stake_address"]
+                else:
+                    payment_hws.write(self.accounts[account]["payment_skey"])
+                    payment_hws.flush()
+                    secret_key_hws = payment_hws.name
+                    address = self.build_payment_address(self.accounts[account]["payment_vkey"])
+
+                cli_args = [
+                    "cardano-hw-cli",
+                    "message",
+                    "sign",
+                    "--message-hex",
+                    msg_hex,
+                    "--signing-path-hwsfile",
+                    secret_key_hws,
+                    "--address",
+                    address,
+                    "--address-hwsfile",
+                    secret_key_hws,
+                    "--out-file",
+                    out_file,
+                    *signing_args
+                ]
+
+                if self.debug:
+                    print(f"def sign_msg: {" ".join(cli_args)}")
+
+                p = subprocess.run(cli_args, capture_output=True, text=True)
+                if p.returncode != 0 or not os.path.exists(out_file):
+                    print(" ".join(cli_args))
+                    print(p.stderr)
+                    raise Exception(f"Unknown error signing message with account {account}")
+            return
+        elif self.accounts[account]["payment_skey"]:
+            with tempfile.NamedTemporaryFile("w+") as payment_skey, tempfile.NamedTemporaryFile("w+") as stake_skey:
+                signing_args = []
+
+                # Messages are expected to be signed with only one of a payment or stake key
+                if stake:
+                    stake_skey.write(self.accounts[account]["stake_skey"])
+                    stake_skey.flush()
+                    secret_key = stake_skey.name
+                    address = self.accounts[account]["stake_address"]
+                else:
+                    payment_skey.write(self.accounts[account]["payment_skey"])
+                    payment_skey.flush()
+                    secret_key = payment_skey.name
+                    address = self.build_payment_address(self.accounts[account]["payment_vkey"])
+
+                cli_args = [
+                    "cardano-signer",
+                    "sign",
+                    "--cip8",
+                    "--data-file",
+                    msg_file,
+                    "--secret-key",
+                    secret_key,
+                    "--address",
+                    address,
+                    "--json-extended",
+                    "--include-maps",
+                    "--out-file",
+                    out_file,
+                    *self.magic_args,
+                    *signing_args
+                ]
+
+                if self.debug:
+                    print(f"def sign_msg: {" ".join(cli_args)}")
+
+                p = subprocess.run(cli_args, capture_output=True, text=True)
+                if p.returncode != 0 or not os.path.exists(out_file):
+                    print(p.stderr)
+                    raise Exception(f"Unknown error signing message with account {account}")
+            return
+        raise Exception(f"No signing key available for account {account}")
 
     def sign_tx(self, account, tx_body, out_file, stake=False, era="latest"):
         if account not in self.accounts:
