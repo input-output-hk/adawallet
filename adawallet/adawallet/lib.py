@@ -5,8 +5,30 @@ import os
 import apsw
 import tarfile
 from pathlib import Path
-
 from blockfrost import BlockFrostApi, ApiError
+from typing import Optional, Sequence, Protocol, List
+
+# BlockFrost latest block object
+class BlockFrostLatestBlock(Protocol):
+    slot: int
+
+# BlockFrost account details object
+class BlockFrostAccountDetails(Protocol):
+    withdrawable_amount: str
+
+# BlockFrost UTXO unit and quantity object
+class BlockFrostAmount(Protocol):
+    unit: str
+    quantity: str
+
+# BlockFrost UTXO object
+class BlockFrostUtxo(Protocol):
+    tx_hash: str
+    tx_index: int
+    amount: Sequence[BlockFrostAmount]
+    data_hash: Optional[str]
+    inline_datum: Optional[str]
+    reference_script_hash: Optional[str]
 
 def input_mnemonic():
     data = input('Input 1st word or entire mnemonic: ')
@@ -22,6 +44,7 @@ def input_mnemonic():
             if data == "":
                 return words
 
+
 class AdaWallet:
     """A single address wallet library that supports mnemonics and hardware wallets"""
 
@@ -33,6 +56,7 @@ class AdaWallet:
         self.wallet_initialized = False
         self.load_state()
 
+
     def initialize(self, testnet, rosetta_url=""):
         self.testnet = testnet
         self.rosetta_url = rosetta_url
@@ -43,11 +67,58 @@ class AdaWallet:
             self.initialize_db()
         self.load_state()
 
+
     def initialize_db(self):
         cursor = self.db.cursor()
-        cursor.execute("create table status(hw_wallet,root_key,testnet,rosetta_url)")
-        cursor.execute("create table utxo(txid,tx_index,address,amount)")
-        cursor.execute("create table accounts(id,payment_vkey,payment_skey,stake_vkey,stake_skey,address,stake_address)")
+
+        cursor.execute('''
+          CREATE TABLE status (
+            hw_wallet,
+            root_key,
+            testnet,
+            rosetta_url
+          )
+        ''')
+
+        cursor.execute('''
+          CREATE TABLE utxo (
+            txid                   TEXT     NOT NULL,
+            tx_index               INTEGER  NOT NULL,
+            address                TEXT     NOT NULL,
+            amount                 INTEGER  NOT NULL,  -- 64 bit signed int for lovelace
+            data_hash              TEXT,               -- hex or null
+            inline_datum           TEXT,               -- hex cbor or null
+            reference_script_hash  TEXT,               -- hex or null
+
+            PRIMARY KEY (txid, tx_index)
+          )
+        ''')
+
+        cursor.execute('''
+          CREATE TABLE utxo_assets (
+            txid                   TEXT     NOT NULL,
+            tx_index               INTEGER  NOT NULL,
+            policy_id              TEXT     NOT NULL,  -- 56 hex chars
+            asset_name             TEXT     NOT NULL,  -- 0 - 64 hex chars
+            quantity               INTEGER  NOT NULL,  -- 64 bit signed int
+
+            PRIMARY KEY (txid, tx_index, policy_id, asset_name),
+            FOREIGN KEY (txid, tx_index) REFERENCES utxo(txid, tx_index) ON DELETE CASCADE
+          );
+        ''')
+
+        cursor.execute('''
+          CREATE TABLE accounts (
+            id,
+            payment_vkey,
+            payment_skey,
+            stake_vkey,
+            stake_skey,
+            address,
+            stake_address
+          )
+        ''')
+
 
     def load_state(self):
         if not os.path.exists(self.state_dir / "data.sqlite"):
@@ -80,6 +151,7 @@ class AdaWallet:
                         "stake_address": stake_address
                 }
 
+
     def wipe(self, prompt=True):
         if self.wallet_initialized and prompt:
             resp = input(f"Are you sure you want to wipe state directory {self.state_dir}? Type YES to confirm: ")
@@ -98,13 +170,16 @@ class AdaWallet:
             raise Exception("Unknown error removing state directory")
         self.wallet_initialized = False
 
+
     def load_wallet_from_mnemonic(self, mnemonic):
         self.initialize_root_key(mnemonic)
+
 
     def initialize_hardware_wallet(self):
         cursor = self.db.cursor()
         cursor.execute("insert into status values(?,?,?,?)", (True, None, self.testnet, ""))
         self.hardware_wallet = True
+
 
     def initialize_read_only(self):
         cursor = self.db.cursor()
@@ -125,6 +200,7 @@ class AdaWallet:
         self.initialize_root_key(mnemonic)
         return mnemonic
 
+
     def initialize_root_key(self, mnemonic):
         cli_args = [
             "cardano-address",
@@ -140,6 +216,7 @@ class AdaWallet:
         cursor = self.db.cursor()
         cursor.execute("insert into status values(?,?,?,?)", (False, root_key, self.testnet, ""))
 
+
     def import_accounts(self, start=None, end=None, accounts_file=None):
         if self.hardware_wallet:
             # HW wallet bulk import with one click
@@ -154,6 +231,7 @@ class AdaWallet:
                 self.import_account(account, reload_state=False)
         self.load_state()
 
+
     def import_accounts_hw(self, start, end, reload_state=True):
         account_indexes = range(start, end + 1)
         accounts = self.derive_account_keys_bulk_hw(account_indexes)
@@ -161,6 +239,7 @@ class AdaWallet:
             self.write_account(account_keys)
         if reload_state:
             self.load_state()
+
 
     def import_account(self, account, reload_state=True):
         if type(account) == int:
@@ -177,6 +256,7 @@ class AdaWallet:
         if reload_state:
             self.load_state()
 
+
     def export_accounts(self, out_file):
         cursor = self.db.cursor()
         accounts = []
@@ -189,9 +269,11 @@ class AdaWallet:
         with open(out_file, 'w') as f:
             f.write(json.dumps(accounts))
 
+
     def write_account(self, account_keys):
         cursor = self.db.cursor()
         cursor.execute("insert into accounts values(?,?,?,?,?,?,?)", account_keys)
+
 
     def build_address(self, payment_vkey, stake_vkey, era="latest"):
         with tempfile.NamedTemporaryFile("w+") as payment, tempfile.NamedTemporaryFile("w+") as stake:
@@ -216,6 +298,7 @@ class AdaWallet:
                 raise Exception(f"Unknown error building address")
         return p.stdout.rstrip()
 
+
     def build_payment_address(self, payment_vkey, era="latest"):
         with tempfile.NamedTemporaryFile("w+") as payment:
             payment.write(payment_vkey)
@@ -236,6 +319,7 @@ class AdaWallet:
                 raise Exception(f"Unknown error building payment address")
         return p.stdout.rstrip()
 
+
     def build_stake_address(self, stake_vkey, era="latest"):
         with tempfile.NamedTemporaryFile("w+") as stake:
             stake.write(stake_vkey)
@@ -255,6 +339,7 @@ class AdaWallet:
                 print(p.stderr)
                 raise Exception(f"Unknown error building stake address")
         return p.stdout.rstrip()
+
 
     def derive_account_keys_bulk_hw(self, account_indexes):
         if self.hardware_wallet:
@@ -290,6 +375,7 @@ class AdaWallet:
                     stake_address = self.build_stake_address(stake_vkey_contents)
                     accounts.append((account, payment_vkey_contents, payment_hws_contents, stake_vkey_contents, stake_hws_contents, address, stake_address))
             return accounts
+
 
     def derive_account_keys(self, account, role):
         if role == "stake":
@@ -376,6 +462,7 @@ class AdaWallet:
                 skey_contents = skey.read()
                 vkey_contents = vkey.read()
             return (vkey_contents, skey_contents)
+
 
     def sign_msg(self, account, msg_file, out_file, stake=False, hashed=False, era="latest"):
         if account not in self.accounts:
@@ -474,6 +561,7 @@ class AdaWallet:
                     raise Exception(f"Unknown error signing message with account {account}")
             return
         raise Exception(f"No signing key available for account {account}")
+
 
     def sign_tx(self, account, tx_body, out_file, stake=False, era="latest"):
         if account not in self.accounts:
@@ -587,6 +675,7 @@ class AdaWallet:
             return
         raise Exception(f"No signing key available for account {account}")
 
+
     def bulk_witness_tx(self, tx_archive, out_file, role):
         with tarfile.open(name=out_file, mode='w:gz') as tarout, tarfile.open(name=tx_archive, mode='r:gz') as tarin:
                 for member in tarin.getmembers():
@@ -612,6 +701,7 @@ class AdaWallet:
                         txsigned_name = f"{account}.txsigned"
                         self.sign_tx(account, tx.name, sign.name, stake=stake)
                         tarout.add(sign.name, txsigned_name)
+
 
     def witness_tx(self, account, tx_body, out_file, role, era="latest"):
         if account not in self.accounts:
@@ -670,22 +760,31 @@ class AdaWallet:
             return
         raise Exception(f"No signing key available for account {account} with role {role}")
 
-    def clear_utxo_table(self):
+
+    def clear_utxo_tables(self):
         cursor = self.db.cursor()
         cursor.execute("delete from utxo")
+        cursor.execute("delete from utxo_assets")
+
 
     def update_utxos_for_accounts(self, filter_min, reload_state=False):
-        self.clear_utxo_table()
+        self.clear_utxo_tables()
         cursor = self.db.cursor()
-        for account,details in self.accounts.items():
-            utxos = self.get_utxos_for_address(details["address"], filter_min)
+        for account, details in self.accounts.items():
+            utxos, utxo_assets = self.get_utxos_for_address(details["address"], filter_min)
+
             for utxo in utxos:
-                cursor.execute("insert into utxo values(?,?,?,?)", utxo)
+                cursor.execute("insert into utxo values(?,?,?,?,?,?,?)", utxo)
+
+            for utxo_asset in utxo_assets:
+                cursor.execute("insert into utxo_assets values(?,?,?,?,?)", utxo_asset)
+
         if reload_state:
             self.load_state()
 
+
     def import_utxos_for_accounts(self, utxo_json, reload_state=False):
-        self.clear_utxo_table()
+        self.clear_utxo_tables()
         with open(utxo_json, 'r') as f:
             utxos = json.load(f)
         cursor = self.db.cursor()
@@ -694,6 +793,7 @@ class AdaWallet:
             cursor.execute("insert into utxo values(?,?,?,?)", utxo)
         if reload_state:
             self.load_state()
+
 
     def export_utxos_for_accounts(self, utxo_json):
         cursor = self.db.cursor()
@@ -708,6 +808,7 @@ class AdaWallet:
             })
         with open(utxo_json, 'w') as f:
             f.write(json.dumps(utxo_entries))
+
 
     def get_rewards_for_stake_address(self, stake_address):
         try:
@@ -724,6 +825,7 @@ class AdaWallet:
                 print(e)
                 exit(1)
 
+
     def get_block(self, blockid=None):
         try:
             if blockid:
@@ -733,9 +835,11 @@ class AdaWallet:
             print(e)
             exit(1)
 
+
     def get_slot_tip(self):
-        block = self.get_block()
+        block: BlockFrostLatestBlock = self.get_block()
         return block.slot
+
 
     def fetch_utxos_address(self, address):
         utxos = []
@@ -744,6 +848,7 @@ class AdaWallet:
         for row in rows:
             utxos.append((row[0], row[1], int(row[3])))
         return utxos
+
 
     def stake_registration_tx(self, account, out_file, fee, ttl=None, sign=False, deposit=2000000, era="latest"):
         with tempfile.NamedTemporaryFile("w+") as stake_registration_certificate, tempfile.NamedTemporaryFile("w+") as vkey:
@@ -771,6 +876,7 @@ class AdaWallet:
                 raise Exception(f"Unknown error generating stake registration certificate for account {account}")
             return self.build_tx(account, out_file, fee, certificates=[stake_registration_certificate.name], ttl=ttl, sign=sign, deposit=deposit, stake=True)
 
+
     def bulk_stake_registration_tx(self, out_file, fee, ttl=None, deposit=2000000, sign=False):
         if sign:
             suffix="txsigned"
@@ -780,13 +886,14 @@ class AdaWallet:
         sum_result = (0, 0, 0, 0)
 
         with tarfile.open(name=out_file, mode='w:gz') as tar:
-            for account,details in self.accounts.items():
+            for account, details in self.accounts.items():
                 with tempfile.NamedTemporaryFile("w+") as tx:
                     result = self.stake_registration_tx(int(account), tx.name, fee, ttl, sign, deposit)
                     if result != (0, 0, 0, 0):
                         tar.add(tx.name, f"{account}.{suffix}")
                 sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
+
 
     def bulk_delegate_pool_tx(self, delegations_file, out_file, fee, ttl=None, sign=False):
         if sign:
@@ -800,13 +907,14 @@ class AdaWallet:
             delegations = json.load(f)
         with open(out_file, "wb") as f2:
             with tarfile.open(fileobj=f2, mode='w:gz') as tar:
-                for account,pool_id in delegations.items():
+                for account, pool_id in delegations.items():
                     with tempfile.NamedTemporaryFile("w+") as tx:
                         result = self.delegate_pool_tx(int(account), pool_id, tx.name, fee, ttl, sign)
                         if result != (0, 0, 0, 0):
                             tar.add(tx.name, f"{account}.{suffix}")
                     sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
+
 
     def bulk_drain_tx(self, send_addr, out_file, fee, ttl=None, sign=False):
         if sign:
@@ -826,6 +934,7 @@ class AdaWallet:
                     sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
 
+
     def migrate_wallet(self, accounts_file, out_file, fee, ttl=None, sign=False):
         if sign:
             suffix="txsigned"
@@ -837,7 +946,7 @@ class AdaWallet:
 
         with open(out_file, "wb") as f:
             with tarfile.open(fileobj=f, mode='w:gz') as tar:
-                for account,details in self.accounts.items():
+                for account, details in self.accounts.items():
                     with tempfile.NamedTemporaryFile("w+") as tx:
                         account_address = details["address"]
                         account_utxos = self.fetch_utxos_address(account_address)
@@ -854,6 +963,7 @@ class AdaWallet:
                             tar.add(tx.name, f"{account}.{suffix}")
                     sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
+
 
     def delegate_pool_tx(self, account, pool_id, out_file, fee, ttl=None, sign=False, era="latest"):
         with tempfile.NamedTemporaryFile("w+") as delegation_certificate, tempfile.NamedTemporaryFile("w+") as vkey:
@@ -882,6 +992,7 @@ class AdaWallet:
             result = self.build_tx(account, out_file, fee, certificates=[delegation_certificate.name], ttl=ttl, sign=sign, stake=True)
         return result
 
+
     def delegate_vote_tx(self, account, voteType, voteTarget, out_file, fee, ttl=None, sign=False, era="latest"):
         with tempfile.NamedTemporaryFile("w+") as vote_delegation_certificate, tempfile.NamedTemporaryFile("w+") as vkey:
             vkey.write(self.accounts[account]["stake_vkey"])
@@ -909,6 +1020,7 @@ class AdaWallet:
             result = self.build_tx(account, out_file, fee, certificates=[vote_delegation_certificate.name], ttl=ttl, sign=sign, stake=True)
         return result
 
+
     def drain_tx(self, account, send_addr, out_file, fee, ttl=None, sign=False):
         stake_address = self.accounts[account]["stake_address"]
 
@@ -931,6 +1043,7 @@ class AdaWallet:
             withdrawals = {}
 
         return self.build_tx(account, out_file, fee, withdrawals=withdrawals, ttl=ttl, sign=sign, stake=True, change_address=send_addr)
+
 
     def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False, change_address=None, era="latest"):
         account_address = self.accounts[account]["address"]
@@ -1003,18 +1116,20 @@ class AdaWallet:
             print(f"No UTXO for address {account_address} -- skipping tx creation")
             return (0,0,0,0)
 
+
     def get_utxos_for_address(self, address, filter_min):
         utxo_count = 0
         utxo_count_nt = 0
         utxo_count_filter_min = 0
         utxos = []
+        utxo_assets = []
 
         if os.getenv('BLOCKFROST_DISABLE', 'False') == "True":
             print(f"Blockfrost is disabled.  Please use `adawallet import-utxos` sub-command to fetch UTXO.")
             exit(1)
 
         try:
-            bf_utxos = self.blockfrost.address_utxos(address=address)
+            bf_utxos: List[BlockFrostUtxo] = self.blockfrost.address_utxos(address=address)
         except ApiError as e:
             if e.status_code == 404:
                 print(f"blockfrost: Address {address} has no UTXO")
@@ -1025,18 +1140,62 @@ class AdaWallet:
                 exit(1)
 
         for utxo in bf_utxos:
+            native_token = False
             utxo_count += 1
-            # TODO: this is a hack assuming utxo only has lovelace if amount == 1
-            if len(utxo.amount) == 1:
-                if int(utxo.amount[0].quantity) > filter_min:
-                    amount = utxo.amount[0].quantity
-                    txid = utxo.tx_hash
-                    index = utxo.tx_index
-                    utxos.append((txid, index, address, amount))
+
+            txid = utxo.tx_hash
+            index = utxo.tx_index
+            data_hash = utxo.data_hash
+            inline_datum = utxo.inline_datum
+            ref_script_hash = utxo.reference_script_hash
+
+            assets = utxo.amount
+            assetCount = len(assets)
+
+            for asset in assets:
+                quantity = int(asset.quantity)
+
+                if asset.unit == "lovelace":
+                    # If the lovelace is in a UTXO containing native token(s),
+                    # or if a lovelace only UTXO and the quantity is greater than the filter_min,
+                    # record the lovelace of the UTXO.
+                    if assetCount > 1 or quantity > filter_min:
+                        amount = quantity
+                        utxos.append(
+                            (
+                                txid,
+                                index,
+                                address,
+                                amount,
+                                data_hash,
+                                inline_datum,
+                                ref_script_hash
+                            )
+                        )
+
+                    # Otherwise, count a lovelace only filtered UTXO.
+                    else:
+                        utxo_count_filter_min += 1
+
+                # If the UTXO asset is not lovelace.
                 else:
-                    utxo_count_filter_min += 1
-            else:
+                    policy_id = asset.unit[:56]
+                    asset_name = asset.unit[56:]
+                    utxo_assets.append(
+                        (
+                            txid,
+                            index,
+                            policy_id,
+                            asset_name,
+                            quantity
+                        )
+                    )
+                    native_token = True
+
+
+            # Count a native token containing UTXO
+            if native_token == True:
                 utxo_count_nt += 1
 
-        print(f"Address {address} has {len(utxos)} UTXO imported; Total parsed: {utxo_count}, NT filtered: {utxo_count_nt}, Min filtered: {utxo_count_filter_min}")
-        return utxos
+        print(f"Address {address} has {len(utxos)} UTXO imported; Total parsed: {utxo_count}, NT containing: {utxo_count_nt}, Min filtered: {utxo_count_filter_min}")
+        return (utxos, utxo_assets)
