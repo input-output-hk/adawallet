@@ -7,6 +7,7 @@ import tarfile
 import tempfile
 from blockfrost import BlockFrostApi, ApiError
 from collections import defaultdict
+from colorama import Fore, Style
 from pathlib import Path
 from typing import Optional, Sequence, Protocol, List
 
@@ -781,7 +782,7 @@ class AdaWallet:
     def update_utxos_for_accounts(self, filter_min, reload_state=False):
         self.clear_utxo_tables()
         cursor = self.db.cursor()
-        for account, details in self.accounts.items():
+        for _, details in self.accounts.items():
             utxos, utxo_assets = self.get_utxos_for_address(details["address"], filter_min)
 
             for utxo in utxos:
@@ -1157,6 +1158,15 @@ class AdaWallet:
         return f"{address} + {lovelace}" if not b else f"{address} + {lovelace} + {b}"
 
 
+    def get_pparams(self):
+        cursor = self.db.cursor()
+        row = cursor.execute("SELECT * from pparams").fetchone()
+        if row is None:
+            return None
+        else:
+            return row[0]
+
+
     def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False, change_address=None, withNTs=False, era="latest"):
         account_address = self.accounts[account]["address"]
 
@@ -1185,48 +1195,47 @@ class AdaWallet:
         ]
 
         account_utxos, account_utxo_assets = self.fetch_utxos_address(account_address, withNTs)
+        pparamsText = self.get_pparams()
 
-        if len(account_utxos) > 0:
-            # Automatically add all lovelace containing UTXO for the account.
-            # This will include native token associated lovelace UTXO if withNTs is true.
-            for txid, index, value, _, _, _ in account_utxos:
-                cli_args.extend(["--tx-in", f"{txid}#{index}"])
-                in_total += value
+        if pparamsText is None and withNTs:
+            print("Transactions involving native tokens require an up to date protocol-parameters file to calculate minimum native token lovelace.")
+            print("From a syncronized cardano-node machine, generate such a file with cardano-cli:")
+            print()
+            print(f"    cardano-cli latest query protocol-parameters {" ".join(self.magic_args)} > pp.json")
+            print()
+            print("This file can then be imported into adawallet with:")
+            print()
+            print(f"    adawallet import-pparams --pparams-file pp.json")
+            exit(1)
 
-            # Any custom txouts requested.
-            for address, value in txouts.items():
-                cli_args.extend(["--tx-out", f"{address}+{value}"])
-                out_total += value
+        with tempfile.NamedTemporaryFile("w+") as pparams:
+            # Prepare a tmpfile with protocol parameters if available.
+            if pparamsText:
+                pparams.write(pparamsText)
+                pparams.flush()
 
-            # Any custom withdrawals requested.
-            for address, value in withdrawals.items():
-                cli_args.extend(["--withdrawal", f"{address}+{value}"])
-                in_total += value
+            if len(account_utxos) > 0:
+                # Automatically add all lovelace containing UTXO for the account.
+                # This will include native token associated lovelace UTXO if withNTs is true.
+                for txid, index, value, _, _, _ in account_utxos:
+                    cli_args.extend(["--tx-in", f"{txid}#{index}"])
+                    in_total += value
 
-            # Any custom certificates requested.
-            for certificate in certificates:
-                cli_args.extend(["--certificate", certificate])
+                # Any custom txouts requested.
+                for address, value in txouts.items():
+                    cli_args.extend(["--tx-out", f"{address}+{value}"])
+                    out_total += value
 
-            if withNTs:
-                cursor = self.db.cursor()
-                row = cursor.execute("SELECT * from pparams").fetchone()
-                if row is None:
-                    print("Transactions involving native tokens require an up to date protocol-parameters file to calculate minimum native token lovelace.")
-                    print("From a syncronized cardano-node machine, generate such a file with cardano-cli:")
-                    print()
-                    print(f"    cardano-cli latest query protocol-parameters {" ".join(self.magic_args)} > pp.json")
-                    print()
-                    print("This file can then be imported into adawallet with:")
-                    print()
-                    print(f"    adawallet import-pparams --pparams-file pp.json")
-                    exit(1)
-                else:
-                    pparams_text = row[0]
+                # Any custom withdrawals requested.
+                for address, value in withdrawals.items():
+                    cli_args.extend(["--withdrawal", f"{address}+{value}"])
+                    in_total += value
 
-                with tempfile.NamedTemporaryFile("w+") as pparams:
-                    pparams.write(pparams_text)
-                    pparams.flush()
+                # Any custom certificates requested.
+                for certificate in certificates:
+                    cli_args.extend(["--certificate", certificate])
 
+                if withNTs:
                     nt_txout_calc = self.bundle_NT_txout(0, change_address, account_utxo_assets)
 
                     cli_NT_args = [
@@ -1248,43 +1257,73 @@ class AdaWallet:
                         print(p.stderr)
                         raise Exception(f"Unknown error calculating the minimum required lovelace UTXO for aggregate native tokens")
 
-                    # Obtain the calculated minimum lovelace to bind the native token tx out
+                    # Obtain the calculated minimum lovelace to bind the native token txout
                     match = re.search(r"(?:Coin|Lovelace)\s+(\d+)", p.stdout.strip())
                     if not match:
-                        raise RuntimeError(f"Unexpected output from cardano-cli while calculating required lovelace UTXO for aggregate native tokens: {p.stdout.strip()!r}")
+                        raise Exception(f"Unexpected output from cardano-cli while calculating required lovelace UTXO for aggregate native tokens: {p.stdout.strip()!r}")
 
-                    # Assemble the final aggregated native token tx out
+                    # Assemble the final aggregated native token txout
                     nt_total = int(match.group(1))
                     nt_txout = self.bundle_NT_txout(nt_total, change_address, account_utxo_assets)
                     cli_args.extend(["--tx-out", nt_txout])
 
-            change = in_total - out_total - fee - deposit - nt_total
-            if change >= 1000000:
-                cli_args.extend(["--tx-out", f"{change_address}+{change}"])
-            elif change == 0:
-                pass
-            elif change < 1000000 and change > 0:
-                fee = change + fee
-            elif change < 0:
-                raise Exception("Error generating transaction, not enough funds")
+                change = in_total - out_total - fee - deposit - nt_total
+                if change >= 1000000:
+                    cli_args.extend(["--tx-out", f"{change_address}+{change}"])
+                elif change == 0:
+                    pass
+                elif change < 1000000 and change > 0:
+                    fee = change + fee
+                elif change < 0:
+                    raise Exception("Error generating transaction, not enough funds")
+                else:
+                    raise Exception("Error generating transaction, unknown error calculating change")
+                cli_args.extend(["--fee", str(fee)])
+
+                if self.debug:
+                    print(f"def build_tx cli_args: {" ".join(cli_args)}")
+
+                p = subprocess.run(cli_args, capture_output=True, text=True)
+                if p.returncode != 0:
+                    print(p.stderr)
+                    raise Exception("Unknown error creating build-raw transaction")
+
+                # If protocol parameters are available, sanity check the fee.
+                if pparamsText:
+                    cli_fee_check_args = [
+                        "cardano-cli",
+                        era,
+                        "transaction",
+                        "calculate-min-fee",
+                        "--tx-body-file",
+                        out_file,
+                        "--protocol-params-file",
+                        pparams.name,
+                        "--witness-count",
+                        "2" if stake else "1"
+                    ]
+
+                    if self.debug:
+                        print(f"def build_tx cli_fee_check_args: {" ".join(cli_args)}")
+
+                    p = subprocess.run(cli_fee_check_args, capture_output=True, text=True)
+                    if p.returncode != 0:
+                        print(p.stderr)
+                        raise Exception("Unknown error calculating minimum fee")
+
+                    calc_fee = json.loads(p.stdout.strip())["fee"]
+                    if calc_fee < fee:
+                        print(f"Calculated fee is: {calc_fee}, actual fee used is: {Fore.GREEN + str(fee) + Style.RESET_ALL}")
+                    else:
+                        print(f"Calculated fee is: {calc_fee}, actual fee used is: {Fore.RED + str(fee) + Style.RESET_ALL} -- {Fore.YELLOW + "adjust your fee and try again!" + Style.RESET_ALL}")
+
+                if sign:
+                    self.sign_tx(account, out_file, out_file, stake=stake)
+
+                return((in_total, out_total, fee, change))
             else:
-                raise Exception("Error generating transaction, unknown error calculating change")
-            cli_args.extend(["--fee", str(fee)])
-
-            if self.debug:
-                print(f"def build_tx: {" ".join(cli_args)}")
-
-            p = subprocess.run(cli_args, capture_output=True, text=True)
-            if p.returncode != 0:
-                print(p.stderr)
-                raise Exception("Unknown error creating bulk transaction")
-
-            if sign:
-                self.sign_tx(account, out_file, out_file, stake=stake)
-            return((in_total, out_total, fee, change))
-        else:
-            print(f"No UTXO for address {account_address} -- skipping tx creation")
-            return (0,0,0,0)
+                print(f"No UTXO for address {account_address} -- skipping tx creation")
+                return (0,0,0,0)
 
 
     def get_utxos_for_address(self, address, filter_min):

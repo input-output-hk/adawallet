@@ -9,6 +9,7 @@
     propagatedBuildInputs = with final; [
       blockfrost
       python3Packages.apsw
+      python3Packages.colorama
       python3Packages.docopt
     ];
 
