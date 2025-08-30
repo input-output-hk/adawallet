@@ -80,6 +80,7 @@ Tips:
     * Importing accounts from exported accounts json file without secrets with not regenerate secrets
     * Use import-accounts with start and end options on fresh adawallet state for account secrets regeneration
     * Native token transactions require loading a "cardano-cli latest query protocol-parameters" json file to calculate minimum UTXO lovelace
+    * Set an env var of DEBUG=True to enable debug logging
     * Rosetta usage is deprecated
 """
 

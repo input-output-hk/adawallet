@@ -1,11 +1,13 @@
-import json
-import subprocess
-import tempfile
-import os
 import apsw
+import json
+import os
+import re
+import subprocess
 import tarfile
-from pathlib import Path
+import tempfile
 from blockfrost import BlockFrostApi, ApiError
+from collections import defaultdict
+from pathlib import Path
 from typing import Optional, Sequence, Protocol, List
 
 # BlockFrost account details object
@@ -1132,6 +1134,29 @@ class AdaWallet:
         return self.build_tx(account, out_file, fee, withdrawals=withdrawals, ttl=ttl, sign=sign, stake=True, change_address=send_addr)
 
 
+    def bundle_NT(self, utxo_assets):
+        parts = []
+        totals = defaultdict(int)
+
+        # Sum identical native tokens to minimize required lovelace and Tx size
+        for _, _, policy, asset_name, quantity in utxo_assets:
+            totals[(policy, asset_name)] += int(quantity)
+
+        # Sort by policy, then asset name
+        items = list(totals.items())
+        items.sort(key=lambda x: (x[0][0], x[0][1]))
+
+        # Build and return the bundled native token string
+        for (policy, asset_name), quantity in items:
+            parts.append(f"{quantity} {policy}.{asset_name}" if asset_name else f"{quantity} {policy}")
+        return " + ".join(parts)
+
+
+    def bundle_NT_txout(self, lovelace, address, utxo_assets):
+        b = self.bundle_NT(utxo_assets)
+        return f"{address} + {lovelace}" if not b else f"{address} + {lovelace} + {b}"
+
+
     def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False, change_address=None, withNTs=False, era="latest"):
         account_address = self.accounts[account]["address"]
 
@@ -1146,6 +1171,7 @@ class AdaWallet:
 
         out_total = 0
         in_total = 0
+        nt_total = 0
 
         cli_args = [
           "cardano-cli",
@@ -1195,9 +1221,44 @@ class AdaWallet:
                     print(f"    adawallet import-pparams --pparams-file pp.json")
                     exit(1)
                 else:
-                    pparams = json.loads(row[0])
+                    pparams_text = row[0]
 
-            change = in_total - out_total - fee - deposit
+                with tempfile.NamedTemporaryFile("w+") as pparams:
+                    pparams.write(pparams_text)
+                    pparams.flush()
+
+                    nt_txout_calc = self.bundle_NT_txout(0, change_address, account_utxo_assets)
+
+                    cli_NT_args = [
+                        "cardano-cli",
+                        era,
+                        "transaction",
+                        "calculate-min-required-utxo",
+                        "--protocol-params-file",
+                        pparams.name,
+                        "--tx-out",
+                        nt_txout_calc
+                    ]
+
+                    if self.debug:
+                        print(f"def build_tx cli_NT_args: {" ".join(cli_NT_args)}")
+
+                    p = subprocess.run(cli_NT_args, capture_output=True, text=True)
+                    if p.returncode != 0:
+                        print(p.stderr)
+                        raise Exception(f"Unknown error calculating the minimum required lovelace UTXO for aggregate native tokens")
+
+                    # Obtain the calculated minimum lovelace to bind the native token tx out
+                    match = re.search(r"(?:Coin|Lovelace)\s+(\d+)", p.stdout.strip())
+                    if not match:
+                        raise RuntimeError(f"Unexpected output from cardano-cli while calculating required lovelace UTXO for aggregate native tokens: {p.stdout.strip()!r}")
+
+                    # Assemble the final aggregated native token tx out
+                    nt_total = int(match.group(1))
+                    nt_txout = self.bundle_NT_txout(nt_total, change_address, account_utxo_assets)
+                    cli_args.extend(["--tx-out", nt_txout])
+
+            change = in_total - out_total - fee - deposit - nt_total
             if change >= 1000000:
                 cli_args.extend(["--tx-out", f"{change_address}+{change}"])
             elif change == 0:
