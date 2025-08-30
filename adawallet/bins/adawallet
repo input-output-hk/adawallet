@@ -8,6 +8,7 @@ Usage:
     adawallet init-restore [--testnet] [--rosetta-url URL]
     adawallet import-accounts -s 0 -e 7
     adawallet import-accounts --accounts-file FILE_JSON
+    adawallet import-pparams --pparams-file FILE_JSON
     adawallet import-utxos --utxo-file FILE_JSON
     adawallet fetch-utxos [--filter-min 3000000]
     adawallet get-ttl [--seconds INT]
@@ -50,6 +51,7 @@ Options:
     --out-file <FILE>                        Output file, type varies -- see suffix indicated in the usage section
     --payment                                Witness with payment key
     --pool-id <BECH32_POOL>                  Pool id hash as bech32
+    --pparams-file <FILE_JSON>               JSON file containing cardano-node protocol parameters for the network your adawallet is configured for
     --recipients <FILE_JSON>                 JSON file containing map of addrs to funds to send {"$bech32_addr_recipient": $lovelace, ...}
     --rosetta-url <URL>                      DEPRECATED: Rosetta URL [default: https://explorer.cardano.org/rosetta]
     --seconds <INT>                          Seconds from now for tx to live [default: 7200]
@@ -77,7 +79,7 @@ Tips:
     * Exporting accounts will not export secrets
     * Importing accounts from exported accounts json file without secrets with not regenerate secrets
     * Use import-accounts with start and end options on fresh adawallet state for account secrets regeneration
-    * Fetch-utxos sub-command will only populate UTXO without native tokens
+    * Native token transactions require loading a "cardano-cli latest query protocol-parameters" json file to calculate minimum UTXO lovelace
     * Rosetta usage is deprecated
 """
 
@@ -237,6 +239,16 @@ elif arguments['fetch-utxos']:
         filter_min = int(arguments["--filter-min"]) if arguments["--filter-min"] is not None else 0
         adawallet.update_utxos_for_accounts(filter_min)
         print("All account utxos updated")
+    else:
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
+        exit(1)
+
+elif arguments['import-pparams']:
+    if adawallet.wallet_initialized:
+        if not arguments["--pparams-file"]:
+            print("Must include --pparams-file")
+            exit(1)
+        adawallet.import_protocol_parameters(arguments["--pparams-file"])
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)

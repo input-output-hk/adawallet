@@ -119,6 +119,12 @@ class AdaWallet:
           )
         ''')
 
+        cursor.execute('''
+          CREATE TABLE pparams (
+            pp                     TEXT
+          )
+        ''')
+
 
     def load_state(self):
         if not os.path.exists(self.state_dir / "data.sqlite"):
@@ -126,7 +132,7 @@ class AdaWallet:
         if os.path.exists(self.state_dir / "data.sqlite") and not self.db:
             self.db: apsw.Connection = apsw.Connection(str((self.state_dir / "data.sqlite").resolve()))
         cursor = self.db.cursor()
-        row = cursor.execute("select * from status").fetchone()
+        row = cursor.execute("SELECT * FROM status").fetchone()
         if row:
             self.wallet_initialized = True
             self.hardware_wallet = row[0]
@@ -140,15 +146,15 @@ class AdaWallet:
                 self.magic_args = ["--testnet-magic", "2"]
             else:
                 self.magic_args = ["--mainnet"]
-            rows = cursor.execute("select * from accounts")
+            rows = cursor.execute("SELECT * FROM accounts")
             for (index, payment_vkey, payment_skey, stake_vkey, stake_skey, address, stake_address) in rows:
                 self.accounts[index] = {
-                        "payment_vkey": payment_vkey,
-                        "payment_skey": payment_skey,
-                        "stake_vkey": stake_vkey,
-                        "stake_skey": stake_skey,
-                        "address": address,
-                        "stake_address": stake_address
+                    "payment_vkey": payment_vkey,
+                    "payment_skey": payment_skey,
+                    "stake_vkey": stake_vkey,
+                    "stake_skey": stake_skey,
+                    "address": address,
+                    "stake_address": stake_address
                 }
 
 
@@ -177,13 +183,13 @@ class AdaWallet:
 
     def initialize_hardware_wallet(self):
         cursor = self.db.cursor()
-        cursor.execute("insert into status values(?,?,?,?)", (True, None, self.testnet, ""))
+        cursor.execute("INSERT INTO status VALUES(?,?,?,?)", (True, None, self.testnet, ""))
         self.hardware_wallet = True
 
 
     def initialize_read_only(self):
         cursor = self.db.cursor()
-        cursor.execute("insert into status values(?,?,?,?)", (False, None, self.testnet, ""))
+        cursor.execute("INSERT INTO status VALUES(?,?,?,?)", (False, None, self.testnet, ""))
 
 
     def create_wallet_mnemonic(self):
@@ -214,7 +220,7 @@ class AdaWallet:
             raise Exception("Unknown error converting mnemonic to root key")
         root_key = p.stdout.rstrip()
         cursor = self.db.cursor()
-        cursor.execute("insert into status values(?,?,?,?)", (False, root_key, self.testnet, ""))
+        cursor.execute("INSERT INTO status VALUES(?,?,?,?)", (False, root_key, self.testnet, ""))
 
 
     def import_accounts(self, start=None, end=None, accounts_file=None):
@@ -258,7 +264,6 @@ class AdaWallet:
 
 
     def export_accounts(self, out_file):
-        cursor = self.db.cursor()
         accounts = []
         for account_index, value in self.accounts.items():
             account = value.copy()
@@ -272,7 +277,7 @@ class AdaWallet:
 
     def write_account(self, account_keys):
         cursor = self.db.cursor()
-        cursor.execute("insert into accounts values(?,?,?,?,?,?,?)", account_keys)
+        cursor.execute("INSERT INTO accounts VALUES(?,?,?,?,?,?,?)", account_keys)
 
 
     def build_address(self, payment_vkey, stake_vkey, era="latest"):
@@ -681,6 +686,8 @@ class AdaWallet:
                 for member in tarin.getmembers():
                     with tempfile.NamedTemporaryFile("wb+") as tx, tempfile.NamedTemporaryFile("w+") as witness:
                         tx_buf = tarin.extractfile(member)
+                        if tx_buf is None:
+                            raise RuntimeError(f"Cannot extract {member.name} from the input TGZ file; do you have unusual permissions on this file?")
                         tx_contents = tx_buf.read()
                         tx.write(tx_contents)
                         tx.flush()
@@ -694,6 +701,8 @@ class AdaWallet:
                 for member in tarin.getmembers():
                     with tempfile.NamedTemporaryFile("wb+") as tx, tempfile.NamedTemporaryFile("w+") as sign:
                         tx_buf = tarin.extractfile(member)
+                        if tx_buf is None:
+                            raise RuntimeError(f"Cannot extract {member.name} from the input TGZ file; do you have unusual permissions on this file?")
                         tx_contents = tx_buf.read()
                         tx.write(tx_contents)
                         tx.flush()
@@ -763,8 +772,8 @@ class AdaWallet:
 
     def clear_utxo_tables(self):
         cursor = self.db.cursor()
-        cursor.execute("delete from utxo")
-        cursor.execute("delete from utxo_assets")
+        cursor.execute("DELETE FROM utxo")
+        cursor.execute("DELETE FROM utxo_assets")
 
 
     def update_utxos_for_accounts(self, filter_min, reload_state=False):
@@ -774,10 +783,23 @@ class AdaWallet:
             utxos, utxo_assets = self.get_utxos_for_address(details["address"], filter_min)
 
             for utxo in utxos:
-                cursor.execute("insert into utxo values(?,?,?,?,?,?,?)", utxo)
+                cursor.execute("INSERT INTO utxo VALUES(?,?,?,?,?,?,?)", utxo)
 
             for utxo_asset in utxo_assets:
-                cursor.execute("insert into utxo_assets values(?,?,?,?,?)", utxo_asset)
+                cursor.execute("INSERT INTO utxo_assets VALUES(?,?,?,?,?)", utxo_asset)
+
+        if reload_state:
+            self.load_state()
+
+
+    def import_protocol_parameters(self, pparams_json , reload_state=False):
+        cursor = self.db.cursor()
+        cursor.execute("DELETE FROM pparams")
+
+        with open(pparams_json, 'r') as f:
+            pparams = json.load(f)
+
+        cursor.execute("INSERT INTO pparams VALUES(?)", (json.dumps(pparams),))
 
         if reload_state:
             self.load_state()
@@ -785,12 +807,15 @@ class AdaWallet:
 
     def import_utxos_for_accounts(self, utxo_json, reload_state=False):
         self.clear_utxo_tables()
+
         with open(utxo_json, 'r') as f:
             utxos = json.load(f)
+
         cursor = self.db.cursor()
         for utxo_attrs in utxos:
             utxo = (utxo_attrs['txid'], utxo_attrs['tx_index'], utxo_attrs['address'], utxo_attrs['amount'])
-            cursor.execute("insert into utxo values(?,?,?,?)", utxo)
+            cursor.execute("INSERT INTO utxo VALUES(?,?,?,?)", utxo)
+
         if reload_state:
             self.load_state()
 
@@ -798,14 +823,16 @@ class AdaWallet:
     def export_utxos_for_accounts(self, utxo_json):
         cursor = self.db.cursor()
         utxo_entries = []
-        rows = cursor.execute("select * from utxo")
+        rows = cursor.execute("SELECT * FROM utxo")
+
         for txid, tx_index, address, amount in rows:
             utxo_entries.append({
-                    "txid": txid,
-                    "tx_index": tx_index,
-                    "address": address,
-                    "amount": amount
+                "txid": txid,
+                "tx_index": tx_index,
+                "address": address,
+                "amount": amount
             })
+
         with open(utxo_json, 'w') as f:
             f.write(json.dumps(utxo_entries))
 
@@ -946,7 +973,7 @@ class AdaWallet:
         sum_result = (0, 0, 0, 0)
 
         with tarfile.open(name=out_file, mode='w:gz') as tar:
-            for account, details in self.accounts.items():
+            for account, _ in self.accounts.items():
                 with tempfile.NamedTemporaryFile("w+") as tx:
                     result = self.stake_registration_tx(int(account), tx.name, fee, ttl, sign, deposit)
                     if result != (0, 0, 0, 0):
@@ -1105,7 +1132,7 @@ class AdaWallet:
         return self.build_tx(account, out_file, fee, withdrawals=withdrawals, ttl=ttl, sign=sign, stake=True, change_address=send_addr)
 
 
-    def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False, change_address=None, era="latest"):
+    def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False, change_address=None, withNTs=False, era="latest"):
         account_address = self.accounts[account]["address"]
 
         if change_address == None:
@@ -1131,22 +1158,44 @@ class AdaWallet:
           out_file
         ]
 
-        account_utxos, account_utxo_assets = self.fetch_utxos_address(account_address, withNTs = True)
+        account_utxos, account_utxo_assets = self.fetch_utxos_address(account_address, withNTs)
+
         if len(account_utxos) > 0:
-            for txid, index, value, data_hash, inline_datum, reference_script_hash in account_utxos:
+            # Automatically add all lovelace containing UTXO for the account.
+            # This will include native token associated lovelace UTXO if withNTs is true.
+            for txid, index, value, _, _, _ in account_utxos:
                 cli_args.extend(["--tx-in", f"{txid}#{index}"])
                 in_total += value
 
+            # Any custom txouts requested.
             for address, value in txouts.items():
                 cli_args.extend(["--tx-out", f"{address}+{value}"])
                 out_total += value
 
+            # Any custom withdrawals requested.
             for address, value in withdrawals.items():
                 cli_args.extend(["--withdrawal", f"{address}+{value}"])
                 in_total += value
 
+            # Any custom certificates requested.
             for certificate in certificates:
                 cli_args.extend(["--certificate", certificate])
+
+            if withNTs:
+                cursor = self.db.cursor()
+                row = cursor.execute("SELECT * from pparams").fetchone()
+                if row is None:
+                    print("Transactions involving native tokens require an up to date protocol-parameters file to calculate minimum native token lovelace.")
+                    print("From a syncronized cardano-node machine, generate such a file with cardano-cli:")
+                    print()
+                    print(f"    cardano-cli latest query protocol-parameters {" ".join(self.magic_args)} > pp.json")
+                    print()
+                    print("This file can then be imported into adawallet with:")
+                    print()
+                    print(f"    adawallet import-pparams --pparams-file pp.json")
+                    exit(1)
+                else:
+                    pparams = json.loads(row[0])
 
             change = in_total - out_total - fee - deposit
             if change >= 1000000:
