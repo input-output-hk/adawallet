@@ -8,10 +8,6 @@ from pathlib import Path
 from blockfrost import BlockFrostApi, ApiError
 from typing import Optional, Sequence, Protocol, List
 
-# BlockFrost latest block object
-class BlockFrostLatestBlock(Protocol):
-    slot: int
-
 # BlockFrost account details object
 class BlockFrostAccountDetails(Protocol):
     withdrawable_amount: str
@@ -20,6 +16,10 @@ class BlockFrostAccountDetails(Protocol):
 class BlockFrostAmount(Protocol):
     unit: str
     quantity: str
+
+# BlockFrost latest block object
+class BlockFrostLatestBlock(Protocol):
+    slot: int
 
 # BlockFrost UTXO object
 class BlockFrostUtxo(Protocol):
@@ -124,7 +124,7 @@ class AdaWallet:
         if not os.path.exists(self.state_dir / "data.sqlite"):
             return
         if os.path.exists(self.state_dir / "data.sqlite") and not self.db:
-            self.db = apsw.Connection(str((self.state_dir / "data.sqlite").resolve()))
+            self.db: apsw.Connection = apsw.Connection(str((self.state_dir / "data.sqlite").resolve()))
         cursor = self.db.cursor()
         row = cursor.execute("select * from status").fetchone()
         if row:
@@ -812,9 +812,7 @@ class AdaWallet:
 
     def get_rewards_for_stake_address(self, stake_address):
         try:
-            account_details = self.blockfrost.accounts(
-                stake_address=stake_address,
-            )
+            account_details: BlockFrostAccountDetails = self.blockfrost.accounts(stake_address=stake_address)
             return { stake_address: int(account_details.withdrawable_amount) }
         except ApiError as e:
             if e.status_code == 404:
@@ -841,13 +839,75 @@ class AdaWallet:
         return block.slot
 
 
-    def fetch_utxos_address(self, address):
+    def fetch_utxos_address(self, address, withNTs=False):
+        scriptUtxos = []
         utxos = []
+        utxo_assets = []
         cursor = self.db.cursor()
-        rows = cursor.execute("select * from utxo WHERE address=?", (address,))
+
+        # Set the lovelace table utxo query according to whether native tokens should be included.
+        if withNTs:
+            rows = cursor.execute("SELECT * FROM utxo WHERE address=?", (address,))
+        else:
+            # When NTs aren't desired, we need to filter lovelace that is
+            # associated with NT containing UTXO from the utxo table.
+            rows = cursor.execute('''
+              SELECT * FROM utxo
+                WHERE utxo.address=?
+                  AND NOT EXISTS (
+                    SELECT 1 FROM utxo_assets
+                      WHERE utxo_assets.txid = utxo.txid
+                        AND utxo_assets.tx_index = utxo.tx_index
+                  )
+            ''', (address,))
+
+        # Process the query results into a list of tuples contains lovelace UTXO for the address.
         for row in rows:
-            utxos.append((row[0], row[1], int(row[3])))
-        return utxos
+            txid = row[0]
+            index = row[1]
+            amount = int(row[3])
+            data_hash = row[4]
+            inline_datum = row[5]
+            reference_script_hash = row[6]
+
+            # Only use UTXO that aren't "special", ie: data_hash, inline_datum
+            # and reference_script_hashes may require or risk any of failing
+            # validation, consuming a reference script, breaking reference
+            # NFTs.
+            if data_hash is None and inline_datum is None and reference_script_hash is None:
+                utxos.append((txid, index, amount, data_hash, inline_datum, reference_script_hash))
+
+            # If we actually run into a UTXO like this in adawallet, log it and
+            # also prepare to remove any corresponding native token assets.
+            else:
+                scriptUtxos.append((txid, index))
+
+        # Now generate the native token UTXO asset list for the address if they were requested.
+        if withNTs:
+            # Select UTXO native token assets which are held under the requested address.
+            rows = cursor.execute('''
+              SELECT utxo_assets.* FROM utxo_assets
+                JOIN utxo ON utxo_assets.txid = utxo.txid
+                  AND utxo_assets.tx_index = utxo.tx_index
+                WHERE utxo.address=?
+            ''', (address,))
+
+            for row in rows:
+                txid = row[0]
+                index = row[1]
+                policy_id = row[2]
+                asset_name = row[3]
+                quantity = row[4]
+
+                # Don't include "special" UTXO which may be unintended and present risk.
+                if (txid, index) not in scriptUtxos:
+                    utxo_assets.append((txid, index, policy_id, asset_name, quantity))
+
+        # Advise the user that some probably unexpected UTXO were considered for spending.
+        for txid, index in scriptUtxos:
+            print(f"Address {address} has UTXO {txid}#{index} which contains a data hash, datum or reference script, skipping...")
+
+        return (utxos, utxo_assets)
 
 
     def stake_registration_tx(self, account, out_file, fee, ttl=None, sign=False, deposit=2000000, era="latest"):
@@ -949,8 +1009,8 @@ class AdaWallet:
                 for account, details in self.accounts.items():
                     with tempfile.NamedTemporaryFile("w+") as tx:
                         account_address = details["address"]
-                        account_utxos = self.fetch_utxos_address(account_address)
-                        total_in = sum(i for _, _, i in account_utxos)
+                        account_utxos, account_utxo_assets = self.fetch_utxos_address(account_address)
+                        total_in = sum(i for _, _, i, _, _, _ in account_utxos)
                         output_address = None
                         for migrate_details in migrate_accounts:
                             if int(account) == int(migrate_details["index"]):
@@ -1071,9 +1131,9 @@ class AdaWallet:
           out_file
         ]
 
-        utxos_address = self.fetch_utxos_address(account_address)
-        if len(utxos_address) > 0:
-            for txid, index, value in utxos_address:
+        account_utxos, account_utxo_assets = self.fetch_utxos_address(account_address, withNTs = True)
+        if len(account_utxos) > 0:
+            for txid, index, value, data_hash, inline_datum, reference_script_hash in account_utxos:
                 cli_args.extend(["--tx-in", f"{txid}#{index}"])
                 in_total += value
 

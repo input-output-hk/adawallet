@@ -10,7 +10,6 @@ Usage:
     adawallet import-accounts --accounts-file FILE_JSON
     adawallet import-utxos --utxo-file FILE_JSON
     adawallet fetch-utxos [--filter-min 3000000]
-    adawallet load-utxo --snapshot FILE_JSON
     adawallet get-ttl [--seconds INT]
     adawallet export-accounts --accounts-file FILE_JSON
     adawallet export-utxos --utxo-file FILE_JSON
@@ -45,7 +44,7 @@ Options:
     --deposit <INT>                          Total deposits in transaction [default: 2000000]
     --drep-id <BECH32_POOL>                  Drep id hash as bech32
     --fee <INT>                              Fee to use for transaction
-    --filter-min <INT>                       Apply a filter predicate such that UTXO larger than <INT> lovelace are imported
+    --filter-min <INT>                       Apply a filter predicate such that lovelace only UTXO larger than <INT> lovelace are imported
     --hashed                                 Hash a message prior to signing per CIP-8
     --msg-file <FILE_MSG>                    A file containing a message to be signed
     --out-file <FILE>                        Output file, type varies -- see suffix indicated in the usage section
