@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ada Wallet
+"""Ada Wallet {version}
 
 Usage:
     adawallet init-create [--testnet] [--rosetta-url URL]
@@ -29,6 +29,7 @@ Usage:
     adawallet bulk-drain-tx --address BECH32_ADDR --fee 210000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
     adawallet bulk-tx --recipients FILE_JSON --account 0 --fee 170000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
     adawallet migrate-wallet --accounts-file FILE_JSON --fee 170000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
+    adawallet version
     adawallet wipe
 
 Options:
@@ -41,7 +42,7 @@ Options:
     --accounts-file <FILE_JSON>              Specify an accounts file to perform operations on
     --address <BECH32_ADDR>                  Address as bech32
     --amount <INT>                           Amount to send
-    --delegations <FILE_JSON>                JSON file containing map of accounts to pool ids {"0": "$bech32_pool", ...}
+    --delegations <FILE_JSON>                JSON file containing map of accounts to pool ids {{"0": "$bech32_pool", ...}}
     --deposit <INT>                          Total deposits in transaction [default: 2000000]
     --drep-id <BECH32_POOL>                  Drep id hash as bech32
     --fee <INT>                              Fee to use for transaction
@@ -52,7 +53,7 @@ Options:
     --payment                                Witness with payment key
     --pool-id <BECH32_POOL>                  Pool id hash as bech32
     --pparams-file <FILE_JSON>               JSON file containing cardano-node protocol parameters for the network your adawallet is configured for
-    --recipients <FILE_JSON>                 JSON file containing map of addrs to funds to send {"$bech32_addr_recipient": $lovelace, ...}
+    --recipients <FILE_JSON>                 JSON file containing map of addrs to funds to send {{"$bech32_addr_recipient": $lovelace, ...}}
     --rosetta-url <URL>                      DEPRECATED: Rosetta URL [default: https://explorer.cardano.org/rosetta]
     --seconds <INT>                          Seconds from now for tx to live [default: 7200]
     --sign                                   Sign Transaction
@@ -70,7 +71,7 @@ Environment Variables:
     ADAWALLET_STATE                          Directory path for adawallet state; defaults to ./state-adawallet
     BLOCKFROST_API_URL                       Appropriate blockfrost base url; defaults to mainnet.  Must regex match form of: ^https://cardano-(mainnet|preview).blockfrost.io/api$
     BLOCKFROST_DISABLE                       To work with adawallet on local testnets where blockfrost is not available, blockfrost can be disabled by setting this bool to `True`
-    BLOCKFROST_PROJECT_ID                    Appropriate blockfrost project secret; no default.  Must regex match form of: ^(mainnet|preview)[A-Za-z0-9]{32}$
+    BLOCKFROST_PROJECT_ID                    Appropriate blockfrost project secret; no default.  Must regex match form of: ^(mainnet|preview)[A-Za-z0-9]{{32}}$
 
 Tips:
     * BLOCKFROST_PROJECT_ID secret env var must be set
@@ -84,21 +85,27 @@ Tips:
     * Rosetta usage is deprecated
 """
 
-import sys
-import os
 import json
-from docopt import docopt
+import os
+import sys
+from adawallet import __version__
 from adawallet.lib import AdaWallet, input_mnemonic
+from docopt import docopt
 
 if len(sys.argv) == 1:
     sys.argv.append('-h')
 
-arguments = docopt(__doc__, version='Ada Wallet 1.0')
+__doc__ = __doc__.format(version=__version__)
+arguments = docopt(__doc__, version=f"Ada Wallet {__version__}")
 state_dir = os.getenv('ADAWALLET_STATE', './state-adawallet')
 debug = os.getenv('DEBUG', 'False') == "True"
 
 adawallet = AdaWallet(state_dir, debug)
-if arguments['wipe']:
+if arguments['version']:
+    print(f"Ada Wallet {__version__}")
+    exit(0)
+
+elif arguments['wipe']:
     adawallet.wipe()
     exit(0)
 
