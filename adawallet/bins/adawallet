@@ -17,7 +17,7 @@ Usage:
     adawallet stake-registration-tx --account 0 --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign] [--deposit 2000000]
     adawallet delegate-pool-tx --account 0 --pool-id BECH32_POOL --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
     adawallet delegate-vote-tx --account 0 --voteType VOTE_TYPE [--voteTarget VOTE_TARGET] --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
-    adawallet send-tx --account 0 --address BECH32_ADDR --amount 5000000 --fee 200000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
+    adawallet send-tx --account 0 --address BECH32_ADDR --amount 5000000 --fee 200000 --out-file FILE_TX_MAYBE_SIGNED [--multiasset] [--ttl 5000000] [--sign]
     adawallet sign-msg --account 0 --msg-file FILE_MSG --out-file FILE_MSG_SIGNED_JSON [--stake] [--hashed]
     adawallet sign-tx --account 0 --tx-body-file FILE_TX --out-file FILE_TX_SIGNED [--stake]
     adawallet witness-tx --account 0 --tx-body-file FILE_TX --out-file FILE_WITNESS [--payment | --stake]
@@ -370,10 +370,13 @@ elif arguments['send-tx']:
             arguments["--out-file"],
             int(arguments["--fee"]),
             txouts=recipients,
+            multiasset=arguments["--multiasset"],
+            asset_address=address if arguments["--multiasset"] else None,
             ttl=arguments["--ttl"],
             sign=arguments["--sign"]
         )
-        print(f"Transaction created sending {out_total} with change remaining of {change} at a fee of {fee}")
+        print(f"Transaction created, {"including native tokens if available" if arguments["--multiasset"] else "excluding native tokens"}, "
+            f"sending {out_total} with change remaining of {change} at a fee of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)

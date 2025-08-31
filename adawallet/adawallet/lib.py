@@ -1170,11 +1170,14 @@ class AdaWallet:
             return row[0]
 
 
-    def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False, change_address=None, multiasset=False, era="latest"):
+    def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False, change_address=None, multiasset=False, asset_address=None, era="latest"):
         account_address = self.accounts[account]["address"]
 
         if change_address == None:
             change_address = account_address
+
+        if asset_address == None:
+            asset_address = change_address
 
         if not ttl:
             if os.getenv('BLOCKFROST_DISABLE', 'False') == "True":
@@ -1226,8 +1229,12 @@ class AdaWallet:
 
                 # Any custom txouts requested.
                 for address, value in txouts.items():
-                    cli_args.extend(["--tx-out", f"{address}+{value}"])
-                    out_total += value
+                    # Don't create txouts for dust UTXO.
+                    if value >= 1000000:
+                        cli_args.extend(["--tx-out", f"{address}+{value}"])
+                        out_total += value
+                    else:
+                        print(f"Skipping dust output UTXO {address}+{value}")
 
                 # Any custom withdrawals requested.
                 for address, value in withdrawals.items():
@@ -1267,7 +1274,7 @@ class AdaWallet:
 
                     # Assemble the final aggregated native token txout
                     nt_total = int(match.group(1))
-                    nt_txout = self.bundle_NT_txout(nt_total, change_address, account_utxo_assets)
+                    nt_txout = self.bundle_NT_txout(nt_total, asset_address, account_utxo_assets)
                     cli_args.extend(["--tx-out", nt_txout])
 
                 change = in_total - out_total - fee - deposit - nt_total
