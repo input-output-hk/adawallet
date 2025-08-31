@@ -1006,7 +1006,7 @@ class AdaWallet:
         return sum_result
 
 
-    def bulk_drain_tx(self, send_addr, out_file, fee, ttl=None, sign=False):
+    def bulk_drain_tx(self, send_addr, out_file, fee, multiasset=False, rewards=False, ttl=None, sign=False):
         if sign:
             suffix="txsigned"
         else:
@@ -1018,7 +1018,7 @@ class AdaWallet:
             with tarfile.open(fileobj=f2, mode='w:gz') as tar:
                 for account in self.accounts:
                     with tempfile.NamedTemporaryFile("w+") as tx:
-                        result = self.drain_tx(int(account), send_addr, tx.name, fee, ttl, sign)
+                        result = self.drain_tx(int(account), send_addr, tx.name, fee, multiasset, rewards, ttl, sign)
                         if result != (0, 0, 0, 0):
                             tar.add(tx.name, f"{account}.{suffix}")
                     sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
