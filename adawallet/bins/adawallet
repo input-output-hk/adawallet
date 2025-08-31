@@ -28,7 +28,7 @@ Usage:
     adawallet bulk-witness-tx --transactions-file FILE_TGZ --out-file FILE_TGZ [--payment | --stake]
     adawallet bulk-drain-tx --address BECH32_ADDR --fee 210000 --out-file FILE_TGZ [--multiasset] [--rewards] [--ttl 5000000] [--sign]
     adawallet bulk-tx --recipients FILE_JSON --account 0 --fee 170000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
-    adawallet migrate-wallet --accounts-file FILE_JSON --fee 170000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
+    adawallet migrate-wallet --accounts-file FILE_JSON --fee 170000 --out-file FILE_TGZ [--multiasset] [--rewards] [--ttl 5000000] [--sign]
     adawallet version
     adawallet wipe
 
@@ -586,10 +586,14 @@ elif arguments['migrate-wallet']:
             arguments["--accounts-file"],
             arguments["--out-file"],
             int(arguments["--fee"]),
+            multiasset=arguments["--multiasset"],
+            rewards=arguments["--rewards"],
             ttl=arguments["--ttl"],
             sign=arguments["--sign"]
         )
-        print(f"Transactions created to migrate wallet with total funds {out_total} and total fees of {fee}")
+        print(f"Transactions created to migrate wallet, {"including rewards if available" if arguments["--rewards"] else "excluding rewards"}, "
+            f"{"including native tokens if available" if arguments["--multiasset"] else "excluding native tokens"}, "
+            f"with total input funds of {in_total} and total fees of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)

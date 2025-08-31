@@ -1025,7 +1025,7 @@ class AdaWallet:
         return sum_result
 
 
-    def migrate_wallet(self, accounts_file, out_file, fee, ttl=None, sign=False):
+    def migrate_wallet(self, accounts_file, out_file, fee, multiasset=False, rewards=False, ttl=None, sign=False):
         if sign:
             suffix="txsigned"
         else:
@@ -1036,21 +1036,21 @@ class AdaWallet:
 
         with open(out_file, "wb") as f:
             with tarfile.open(fileobj=f, mode='w:gz') as tar:
-                for account, details in self.accounts.items():
+                for account, _ in self.accounts.items():
                     with tempfile.NamedTemporaryFile("w+") as tx:
-                        account_address = details["address"]
-                        account_utxos, account_utxo_assets = self.fetch_utxos_address(account_address)
-                        total_in = sum(i for _, _, i, _, _, _ in account_utxos)
                         output_address = None
+
                         for migrate_details in migrate_accounts:
                             if int(account) == int(migrate_details["index"]):
                                 output_address = migrate_details["address"]
+
                         if not output_address:
                             raise Exception("Error! accounts file must contain an address for every existing account to migrate")
-                        txouts = { output_address: total_in - fee }
-                        result = self.build_tx(account, tx.name, fee, txouts=txouts, ttl=ttl, sign=sign)
+
+                        result = self.drain_tx(int(account), output_address, tx.name, fee, multiasset, rewards, ttl, sign)
                         if result != (0, 0, 0, 0):
                             tar.add(tx.name, f"{account}.{suffix}")
+
                     sum_result = (sum_result[0] + result[0], sum_result[1] + result[1], sum_result[2] + result[2], sum_result[3] + result[3])
         return sum_result
 
