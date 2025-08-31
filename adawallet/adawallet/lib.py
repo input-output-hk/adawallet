@@ -869,14 +869,14 @@ class AdaWallet:
         return block.slot
 
 
-    def fetch_utxos_address(self, address, withNTs=False):
+    def fetch_utxos_address(self, address, multiasset=False):
         scriptUtxos = []
         utxos = []
         utxo_assets = []
         cursor = self.db.cursor()
 
         # Set the lovelace table utxo query according to whether native tokens should be included.
-        if withNTs:
+        if multiasset:
             rows = cursor.execute("SELECT * FROM utxo WHERE address=?", (address,))
         else:
             # When NTs aren't desired, we need to filter lovelace that is
@@ -913,7 +913,7 @@ class AdaWallet:
                 scriptUtxos.append((txid, index))
 
         # Now generate the native token UTXO asset list for the address if they were requested.
-        if withNTs:
+        if multiasset:
             # Select UTXO native token assets which are held under the requested address.
             rows = cursor.execute('''
               SELECT utxo_assets.* FROM utxo_assets
@@ -1111,7 +1111,7 @@ class AdaWallet:
         return result
 
 
-    def drain_tx(self, account, send_addr, out_file, fee, ttl=None, sign=False):
+    def drain_tx(self, account, send_addr, out_file, fee, multiasset=False, rewards=False, ttl=None, sign=False):
         stake_address = self.accounts[account]["stake_address"]
 
         if os.getenv('BLOCKFROST_DISABLE', 'False') == "True":
@@ -1122,17 +1122,20 @@ class AdaWallet:
             else:
                 print(f"Blockfrost is disabled, setting account {account} stake rewards from env var: ADAWALLET_ACCOUNT_{account}_STAKE_REWARDS")
                 withdrawals = { stake_address: int(os.getenv(f"ADAWALLET_ACCOUNT_{account}_STAKE_REWARDS", "0")) }
-        else:
+        elif rewards:
             withdrawals = self.get_rewards_for_stake_address(stake_address)
+        else:
+            withdrawals = {}
+            withdrawals[stake_address] = 0
 
         if self.debug:
-            print(f"def drain_tx: Stake address:rewards are: {withdrawals}")
+            print(f"def drain_tx: rewards withdrawal are {"enabled" if rewards else "disabled"}; stake address:rewards for account {account} are: {withdrawals}")
 
         if withdrawals[stake_address] == 0:
             print(f"No rewards for address {stake_address} -- drain tx may still be created if account payment address UTXO are present")
             withdrawals = {}
 
-        return self.build_tx(account, out_file, fee, withdrawals=withdrawals, ttl=ttl, sign=sign, stake=True, change_address=send_addr)
+        return self.build_tx(account, out_file, fee, withdrawals=withdrawals, ttl=ttl, sign=sign, stake=True, change_address=send_addr, multiasset=multiasset)
 
 
     def bundle_NT(self, utxo_assets):
@@ -1167,7 +1170,7 @@ class AdaWallet:
             return row[0]
 
 
-    def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False, change_address=None, withNTs=False, era="latest"):
+    def build_tx(self, account, out_file, fee, txouts={}, withdrawals={}, certificates=[], ttl=None, sign=False, deposit=0, stake=False, change_address=None, multiasset=False, era="latest"):
         account_address = self.accounts[account]["address"]
 
         if change_address == None:
@@ -1194,10 +1197,10 @@ class AdaWallet:
           out_file
         ]
 
-        account_utxos, account_utxo_assets = self.fetch_utxos_address(account_address, withNTs)
+        account_utxos, account_utxo_assets = self.fetch_utxos_address(account_address, multiasset)
         pparamsText = self.get_pparams()
 
-        if pparamsText is None and withNTs:
+        if pparamsText is None and multiasset:
             print("Transactions involving native tokens require an up to date protocol-parameters file to calculate minimum native token lovelace.")
             print("From a syncronized cardano-node machine, generate such a file with cardano-cli:")
             print()
@@ -1216,7 +1219,7 @@ class AdaWallet:
 
             if len(account_utxos) > 0:
                 # Automatically add all lovelace containing UTXO for the account.
-                # This will include native token associated lovelace UTXO if withNTs is true.
+                # This will include native token associated lovelace UTXO if multiasset is true.
                 for txid, index, value, _, _, _ in account_utxos:
                     cli_args.extend(["--tx-in", f"{txid}#{index}"])
                     in_total += value
@@ -1235,7 +1238,7 @@ class AdaWallet:
                 for certificate in certificates:
                     cli_args.extend(["--certificate", certificate])
 
-                if withNTs:
+                if multiasset:
                     nt_txout_calc = self.bundle_NT_txout(0, change_address, account_utxo_assets)
 
                     cli_NT_args = [
@@ -1316,6 +1319,7 @@ class AdaWallet:
                         print(f"Calculated fee is: {calc_fee}, actual fee used is: {Fore.GREEN + str(fee) + Style.RESET_ALL}")
                     else:
                         print(f"Calculated fee is: {calc_fee}, actual fee used is: {Fore.RED + str(fee) + Style.RESET_ALL} -- {Fore.YELLOW + "adjust your fee and try again!" + Style.RESET_ALL}")
+                        exit(1)
 
                 if sign:
                     self.sign_tx(account, out_file, out_file, stake=stake)
