@@ -786,7 +786,7 @@ class AdaWallet:
         self.clear_utxo_tables()
         cursor = self.db.cursor()
 
-        total_utxo = 0
+        total_utxo_count = 0
         total_utxo_count_nt = 0
         total_utxo_count_filter_min = 0
 
@@ -799,11 +799,11 @@ class AdaWallet:
             for utxo_asset in utxo_assets:
                 cursor.execute("INSERT INTO utxo_assets VALUES(?,?,?,?,?)", utxo_asset)
 
-            total_utxo = total_utxo + len(utxos)
-            total_utxo_count_nt = total_utxo_count_nt + utxo_count_nt
-            total_utxo_count_filter_min = total_utxo_count_filter_min + utxo_count_filter_min
+            total_utxo_count += len(utxos)
+            total_utxo_count_nt += utxo_count_nt
+            total_utxo_count_filter_min += utxo_count_filter_min
 
-        print(f"Total UTXO imported: {total_utxo}; Total native token containing: {total_utxo_count_nt}; Total min filtered: {total_utxo_count_filter_min}")
+        print(f"Total UTXO imported: {total_utxo_count}; Total parsed: {total_utxo_count + total_utxo_count_filter_min}; Total native token containing: {total_utxo_count_nt}; Total min filtered: {total_utxo_count_filter_min}")
 
         if reload_state:
             self.load_state()
@@ -822,16 +822,102 @@ class AdaWallet:
             self.load_state()
 
 
-    def import_utxos_for_accounts(self, utxo_json, reload_state=False):
+    def import_utxos_for_accounts(self, utxo_json, filter_min, reload_state=False):
         self.clear_utxo_tables()
 
         with open(utxo_json, 'r') as f:
-            utxos = json.load(f)
+            import_utxos = json.load(f)
 
         cursor = self.db.cursor()
-        for utxo_attrs in utxos:
-            utxo = (utxo_attrs['txid'], utxo_attrs['tx_index'], utxo_attrs['address'], utxo_attrs['amount'])
-            cursor.execute("INSERT INTO utxo VALUES(?,?,?,?)", utxo)
+
+        address_utxo = {}
+        total_utxo_count_parsed = 0
+        total_utxo_count_nt = 0
+        total_utxo_count_filter_min = 0
+        utxos = []
+        utxo_assets = []
+
+        for utxo in import_utxos:
+            native_token = False
+            total_utxo_count_parsed += 1
+
+            address = utxo["address"]
+            txid = utxo["txid"]
+            tx_index = utxo["tx_index"]
+            data_hash = utxo["data_hash"]
+            inline_datum = utxo["inline_datum"]
+            ref_script_hash = utxo["reference_script_hash"]
+
+            perAddress = address_utxo.setdefault(address, {})
+            perAddress["utxo_count_parsed"] = perAddress.get("utxo_count_parsed", 0) + 1
+
+            assets = utxo["amount"]
+            assetCount = len(assets)
+
+            for asset in assets:
+                quantity = int(asset["quantity"])
+
+                if asset["unit"] == "lovelace":
+                    # If the lovelace is in a UTXO containing native token(s),
+                    # or if a lovelace only UTXO and the quantity is greater than the filter_min,
+                    # record the lovelace of the UTXO.
+                    if assetCount > 1 or quantity > filter_min:
+                        amount = quantity
+                        utxos.append(
+                            (
+                                txid,
+                                tx_index,
+                                address,
+                                amount,
+                                data_hash,
+                                inline_datum,
+                                ref_script_hash
+                            )
+                        )
+
+                    # Otherwise, count a lovelace only filtered UTXO.
+                    else:
+                        total_utxo_count_filter_min += 1
+                        perAddress["utxo_count_filter_min"] = perAddress.get("utxo_count_filter_min", 0) + 1
+
+                # If the UTXO asset is not lovelace.
+                else:
+                    policy_id = asset["unit"][:56]
+                    asset_name = asset["unit"][56:]
+                    utxo_assets.append(
+                        (
+                            txid,
+                            tx_index,
+                            policy_id,
+                            asset_name,
+                            quantity
+                        )
+                    )
+                    native_token = True
+
+            # Count a native token containing UTXO
+            if native_token == True:
+                total_utxo_count_nt += 1
+                perAddress["utxo_count_nt"] = perAddress.get("utxo_count_nt", 0) + 1
+
+        with self.db:
+            for utxo in utxos:
+                print(f"Importing {utxo[0]}#{utxo[1]} of address {utxo[2]} with lovelace quantity {utxo[3]}")
+                cursor.execute("INSERT INTO utxo VALUES(?,?,?,?,?,?,?)", utxo)
+
+            for utxo_asset in utxo_assets:
+                print(f"Importing {utxo_asset[0]}#{utxo_asset[1]} of policy {utxo_asset[2]} with asset name {utxo_asset[3]} with quantity {utxo_asset[4]}")
+                cursor.execute("INSERT INTO utxo_assets VALUES(?,?,?,?,?)", utxo_asset)
+
+        print()
+        print("Import Address Summary:")
+        for address, v in sorted(address_utxo.items()):
+            print(f"Address {address} had {v.get("utxo_count_parsed", 0) - v.get("utxo_count_filter_min", 0)} UTXO imported; "
+                f"Total parsed: {v.get("utxo_count_parsed", 0)}, "
+                f"Native token containing: {v.get("utxo_count_nt", 0)}, "
+                f"Min filtered: {v.get("utxo_count_filter_min", 0)}")
+        print()
+        print(f"Total UTXO imported: {len(utxos)}; Total parsed: {total_utxo_count_parsed}; Total native token containing: {total_utxo_count_nt}; Total min filtered: {total_utxo_count_filter_min}")
 
         if reload_state:
             self.load_state()
@@ -914,15 +1000,17 @@ class AdaWallet:
           FROM utxo_objs;
         '''
 
-        for account, details in self.accounts.items():
-            address = details["address"]
-            row = cursor.execute(query, (address,)).fetchone()
-            if row and row[0]:
-                utxo = json.loads(row[0])
-                print(f"Account {account} address {address} had {len(utxo)} UTXO exported")
-                utxo_entries.extend(utxo)
-            else:
-                print(f"Account {account} address {address} had 0 UTXO exported")
+        with self.db:
+            for account, details in self.accounts.items():
+                address = details["address"]
+                row = cursor.execute(query, (address,)).fetchone()
+                if row and row[0]:
+                    utxo = json.loads(row[0])
+                    print(f"Account {account} address {address} had {len(utxo)} UTXO exported")
+                    utxo_entries.extend(utxo)
+                else:
+                    print(f"Account {account} address {address} had 0 UTXO exported")
+
         print(f"Total UTXO exported: {len(utxo_entries)}")
 
         with open(utxo_json, 'w') as f:
@@ -1427,7 +1515,7 @@ class AdaWallet:
 
 
     def get_utxos_for_address(self, address, filter_min):
-        utxo_count = 0
+        utxo_count_parsed = 0
         utxo_count_nt = 0
         utxo_count_filter_min = 0
         utxos = []
@@ -1450,7 +1538,7 @@ class AdaWallet:
 
         for utxo in bf_utxos:
             native_token = False
-            utxo_count += 1
+            utxo_count_parsed += 1
 
             txid = utxo.tx_hash
             tx_index = utxo.tx_index
@@ -1501,10 +1589,9 @@ class AdaWallet:
                     )
                     native_token = True
 
-
             # Count a native token containing UTXO
             if native_token == True:
                 utxo_count_nt += 1
 
-        print(f"Address {address} had {len(utxos)} UTXO imported; Total parsed: {utxo_count}, Native token containing: {utxo_count_nt}, Min filtered: {utxo_count_filter_min}")
+        print(f"Address {address} had {len(utxos)} UTXO imported; Total parsed: {utxo_count_parsed}, Native token containing: {utxo_count_nt}, Min filtered: {utxo_count_filter_min}")
         return (utxos, utxo_assets, utxo_count_nt, utxo_count_filter_min)
