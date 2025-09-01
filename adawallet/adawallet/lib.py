@@ -233,11 +233,13 @@ class AdaWallet:
         elif start != None and end != None:
             for i in range(start, end + 1):
                 self.import_account(i, reload_state=False)
+                print(f"Account {i} imported by derivation")
         elif accounts_file:
             with open(accounts_file) as f:
                 accounts = json.load(f)
             for account in accounts:
                 self.import_account(account, reload_state=False)
+                print(f"Account {account["index"]} address {account["address"]} imported from accounts file")
         self.load_state()
 
 
@@ -274,8 +276,9 @@ class AdaWallet:
             account["payment_skey"] = None
             account["stake_skey"] = None
             accounts.append(account)
+            print(f"Account {account_index} address {account["address"]} exported")
         with open(out_file, 'w') as f:
-            f.write(json.dumps(accounts))
+            f.write(json.dumps(accounts, indent=2))
 
 
     def write_account(self, account_keys):
