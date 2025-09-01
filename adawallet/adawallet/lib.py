@@ -841,65 +841,72 @@ class AdaWallet:
         query = '''
           WITH
 
-          -- UTXO for requested address
+          -- UTXO for requested address.
           address_utxos AS (SELECT * FROM utxo WHERE address=?),
 
-          -- Create a dict of key: (txid, tx_index, policy), value: {asset_name -> quantity}
-          policy_maps AS (
+          -- Create one amount item with unit and quantity per lovelace or native token.
+          amount_items AS (
+            -- A lovelace row is always present
+            SELECT
+              au.txid,
+              au.tx_index,
+              json_object(
+                'unit', 'lovelace',
+                'quantity', CAST(au.amount AS TEXT)
+              ) AS item,
+              0 AS ord, NULL AS pol, NULL AS an
+            FROM address_utxos au
+
+            -- Ord, pol, an above and below are used for union sorting below.
+            UNION ALL
+
+            -- Native assets present
             SELECT
               ua.txid,
               ua.tx_index,
-              ua.policy_id,
-              (
-                SELECT json_group_object(a.asset_name, a.quantity)
-                FROM utxo_assets a
-                WHERE a.txid = ua.txid
-                  AND a.tx_index = ua.tx_index
-                  AND a.policy_id = ua.policy_id
-              ) AS assets_obj
+              json_object(
+                'unit', ua.policy_id || ua.asset_name,
+                'quantity', CAST(ua.quantity AS TEXT)
+              ) AS item,
+              1 AS ord, ua.policy_id AS pol, ua.asset_name AS an
             FROM utxo_assets ua
             JOIN address_utxos au
               ON au.txid = ua.txid AND au.tx_index = ua.tx_index
-            GROUP BY ua.txid, ua.tx_index, ua.policy_id
           ),
 
-          -- KV rows that will form the "value" object
-          value_kv AS (
-            -- Lovelace is always present
-            SELECT txid, tx_index, 'lovelace' AS k, amount AS v
-            FROM address_utxos
-
-            UNION ALL
-
-            -- One row per policy_id = {asset_name -> quantity}
-            SELECT txid, tx_index, policy_id AS k, assets_obj AS v
-            FROM policy_maps
+          -- Build the ordered amount array per (txid, tx_index)
+          amount_json AS (
+            SELECT
+              ai.txid,
+              ai.tx_index,
+              (
+                SELECT json_group_array(json(item))
+                FROM amount_items ai2
+                WHERE ai2.txid = ai.txid AND ai2.tx_index = ai.tx_index
+                ORDER BY ai2.ord, ai2.pol, ai2.an
+              ) AS amount_array
+            FROM amount_items ai
+            GROUP BY ai.txid, ai.tx_index
           ),
 
-          -- Collapse KVs into the final "value" JSON object per UTxO
-          value_json AS (
-            SELECT txid, tx_index, json_group_object(k, json(v)) AS value
-            FROM value_kv
-            GROUP BY txid, tx_index
-          ),
-
-          -- Assemble the final UTXO objects
+          -- Final UTxO objects
           utxo_objs AS (
             SELECT json_object(
               'txid', au.txid,
               'tx_index', au.tx_index,
               'address', au.address,
-              'value', json(vj.value),
+              'amount', json(aj.amount_array),
               'data_hash', au.data_hash,
               'inline_datum', au.inline_datum,
               'reference_script_hash', au.reference_script_hash
             ) AS obj
             FROM address_utxos au
-            JOIN value_json vj
-              ON vj.txid = au.txid AND vj.tx_index = au.tx_index
+            JOIN amount_json aj
+              ON aj.txid = au.txid AND aj.tx_index = au.tx_index
             ORDER BY au.txid, au.tx_index
           )
 
+          -- One JSON array of UTXO
           SELECT json_group_array(json(obj)) AS utxos_json
           FROM utxo_objs;
         '''
@@ -1443,7 +1450,7 @@ class AdaWallet:
             utxo_count += 1
 
             txid = utxo.tx_hash
-            index = utxo.tx_index
+            tx_index = utxo.tx_index
             data_hash = utxo.data_hash
             inline_datum = utxo.inline_datum
             ref_script_hash = utxo.reference_script_hash
@@ -1463,7 +1470,7 @@ class AdaWallet:
                         utxos.append(
                             (
                                 txid,
-                                index,
+                                tx_index,
                                 address,
                                 amount,
                                 data_hash,
@@ -1483,7 +1490,7 @@ class AdaWallet:
                     utxo_assets.append(
                         (
                             txid,
-                            index,
+                            tx_index,
                             policy_id,
                             asset_name,
                             quantity
