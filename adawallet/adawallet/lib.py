@@ -782,14 +782,25 @@ class AdaWallet:
     def update_utxos_for_accounts(self, filter_min, reload_state=False):
         self.clear_utxo_tables()
         cursor = self.db.cursor()
+
+        total_utxo = 0
+        total_utxo_count_nt = 0
+        total_utxo_count_filter_min = 0
+
         for _, details in self.accounts.items():
-            utxos, utxo_assets = self.get_utxos_for_address(details["address"], filter_min)
+            utxos, utxo_assets, utxo_count_nt, utxo_count_filter_min = self.get_utxos_for_address(details["address"], filter_min)
 
             for utxo in utxos:
                 cursor.execute("INSERT INTO utxo VALUES(?,?,?,?,?,?,?)", utxo)
 
             for utxo_asset in utxo_assets:
                 cursor.execute("INSERT INTO utxo_assets VALUES(?,?,?,?,?)", utxo_asset)
+
+            total_utxo = total_utxo + len(utxos)
+            total_utxo_count_nt = total_utxo_count_nt + utxo_count_nt
+            total_utxo_count_filter_min = total_utxo_count_filter_min + utxo_count_filter_min
+
+        print(f"Total UTXO imported: {total_utxo}; Total native token containing: {total_utxo_count_nt}; Total min filtered: {total_utxo_count_filter_min}")
 
         if reload_state:
             self.load_state()
@@ -826,18 +837,86 @@ class AdaWallet:
     def export_utxos_for_accounts(self, utxo_json):
         cursor = self.db.cursor()
         utxo_entries = []
-        rows = cursor.execute("SELECT * FROM utxo")
 
-        for txid, tx_index, address, amount in rows:
-            utxo_entries.append({
-                "txid": txid,
-                "tx_index": tx_index,
-                "address": address,
-                "amount": amount
-            })
+        query = '''
+          WITH
+
+          -- UTXO for requested address
+          address_utxos AS (SELECT * FROM utxo WHERE address=?),
+
+          -- Create a dict of key: (txid, tx_index, policy), value: {asset_name -> quantity}
+          policy_maps AS (
+            SELECT
+              ua.txid,
+              ua.tx_index,
+              ua.policy_id,
+              (
+                SELECT json_group_object(a.asset_name, a.quantity)
+                FROM utxo_assets a
+                WHERE a.txid = ua.txid
+                  AND a.tx_index = ua.tx_index
+                  AND a.policy_id = ua.policy_id
+              ) AS assets_obj
+            FROM utxo_assets ua
+            JOIN address_utxos au
+              ON au.txid = ua.txid AND au.tx_index = ua.tx_index
+            GROUP BY ua.txid, ua.tx_index, ua.policy_id
+          ),
+
+          -- KV rows that will form the "value" object
+          value_kv AS (
+            -- Lovelace is always present
+            SELECT txid, tx_index, 'lovelace' AS k, amount AS v
+            FROM address_utxos
+
+            UNION ALL
+
+            -- One row per policy_id = {asset_name -> quantity}
+            SELECT txid, tx_index, policy_id AS k, assets_obj AS v
+            FROM policy_maps
+          ),
+
+          -- Collapse KVs into the final "value" JSON object per UTxO
+          value_json AS (
+            SELECT txid, tx_index, json_group_object(k, json(v)) AS value
+            FROM value_kv
+            GROUP BY txid, tx_index
+          ),
+
+          -- Assemble the final UTXO objects
+          utxo_objs AS (
+            SELECT json_object(
+              'txid', au.txid,
+              'tx_index', au.tx_index,
+              'address', au.address,
+              'value', json(vj.value),
+              'data_hash', au.data_hash,
+              'inline_datum', au.inline_datum,
+              'reference_script_hash', au.reference_script_hash
+            ) AS obj
+            FROM address_utxos au
+            JOIN value_json vj
+              ON vj.txid = au.txid AND vj.tx_index = au.tx_index
+            ORDER BY au.txid, au.tx_index
+          )
+
+          SELECT json_group_array(json(obj)) AS utxos_json
+          FROM utxo_objs;
+        '''
+
+        for account, details in self.accounts.items():
+            address = details["address"]
+            row = cursor.execute(query, (address,)).fetchone()
+            if row and row[0]:
+                utxo = json.loads(row[0])
+                print(f"Account {account} address {address} had {len(utxo)} UTXO exported")
+                utxo_entries.extend(utxo)
+            else:
+                print(f"Account {account} address {address} had 0 UTXO exported")
+        print(f"Total UTXO exported: {len(utxo_entries)}")
 
         with open(utxo_json, 'w') as f:
-            f.write(json.dumps(utxo_entries))
+            f.write(json.dumps(utxo_entries, indent=2))
 
 
     def get_rewards_for_stake_address(self, stake_address):
@@ -1417,5 +1496,5 @@ class AdaWallet:
             if native_token == True:
                 utxo_count_nt += 1
 
-        print(f"Address {address} has {len(utxos)} UTXO imported; Total parsed: {utxo_count}, NT containing: {utxo_count_nt}, Min filtered: {utxo_count_filter_min}")
-        return (utxos, utxo_assets)
+        print(f"Address {address} had {len(utxos)} UTXO imported; Total parsed: {utxo_count}, Native token containing: {utxo_count_nt}, Min filtered: {utxo_count_filter_min}")
+        return (utxos, utxo_assets, utxo_count_nt, utxo_count_filter_min)

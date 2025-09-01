@@ -248,7 +248,7 @@ elif arguments['fetch-utxos']:
     if adawallet.wallet_initialized:
         filter_min = int(arguments["--filter-min"]) if arguments["--filter-min"] is not None else 0
         adawallet.update_utxos_for_accounts(filter_min)
-        print("All account utxos updated")
+        print("All account UTXO updated")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
