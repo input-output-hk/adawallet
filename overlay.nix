@@ -1,14 +1,15 @@
-{ inputs, self }: final: prev: {
+{ inputs, self }: final: prev: with builtins; {
   inherit (inputs.cardano-parts.packages.x86_64-linux) cardano-node cardano-cli cardano-signer bech32 cardano-address;
 
   adawallet = final.python3Packages.buildPythonApplication {
     pname = "adawallet";
-    version = "1.0.0";
+    version = head (match ".*__version__ = \"(.*)\".*" (readFile ./adawallet/adawallet/__init__.py));
     src = ./adawallet;
 
     propagatedBuildInputs = with final; [
       blockfrost
       python3Packages.apsw
+      python3Packages.colorama
       python3Packages.docopt
     ];
 

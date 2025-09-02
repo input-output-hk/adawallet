@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ada Wallet
+"""Ada Wallet {version}
 
 Usage:
     adawallet init-create [--testnet] [--rosetta-url URL]
@@ -8,27 +8,28 @@ Usage:
     adawallet init-restore [--testnet] [--rosetta-url URL]
     adawallet import-accounts -s 0 -e 7
     adawallet import-accounts --accounts-file FILE_JSON
-    adawallet import-utxos --utxo-file FILE_JSON
+    adawallet import-pparams --pparams-file FILE_JSON
+    adawallet import-utxos --utxo-file FILE_JSON [--filter-min 3000000]
     adawallet fetch-utxos [--filter-min 3000000]
-    adawallet load-utxo --snapshot FILE_JSON
     adawallet get-ttl [--seconds INT]
     adawallet export-accounts --accounts-file FILE_JSON
     adawallet export-utxos --utxo-file FILE_JSON
     adawallet stake-registration-tx --account 0 --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign] [--deposit 2000000]
     adawallet delegate-pool-tx --account 0 --pool-id BECH32_POOL --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
     adawallet delegate-vote-tx --account 0 --voteType VOTE_TYPE [--voteTarget VOTE_TARGET] --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
-    adawallet send-tx --account 0 --address BECH32_ADDR --amount 5000000 --fee 200000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
+    adawallet send-tx --account 0 --address BECH32_ADDR --amount 5000000 --fee 200000 --out-file FILE_TX_MAYBE_SIGNED [--multiasset] [--ttl 5000000] [--sign]
     adawallet sign-msg --account 0 --msg-file FILE_MSG --out-file FILE_MSG_SIGNED_JSON [--stake] [--hashed]
     adawallet sign-tx --account 0 --tx-body-file FILE_TX --out-file FILE_TX_SIGNED [--stake]
     adawallet witness-tx --account 0 --tx-body-file FILE_TX --out-file FILE_WITNESS [--payment | --stake]
-    adawallet drain-tx --account 0 --address BECH32_ADDR --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
+    adawallet drain-tx --account 0 --address BECH32_ADDR --fee 210000 --out-file FILE_TX_MAYBE_SIGNED [--multiasset] [--rewards] [--ttl 5000000] [--sign]
     adawallet bulk-stake-registration-tx --fee 210000 --out-file FILE_TGZ [--ttl 5000000] [--sign] [--deposit 2000000]
     adawallet bulk-delegate-pool-tx --delegations FILE_JSON --fee 210000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
     adawallet bulk-sign-tx --transactions-file FILE_TGZ --out-file FILE_TGZ [--stake]
     adawallet bulk-witness-tx --transactions-file FILE_TGZ --out-file FILE_TGZ [--payment | --stake]
-    adawallet bulk-drain-tx --address BECH32_ADDR --fee 210000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
+    adawallet bulk-drain-tx --address BECH32_ADDR --fee 210000 --out-file FILE_TGZ [--multiasset] [--rewards] [--ttl 5000000] [--sign]
     adawallet bulk-tx --recipients FILE_JSON --account 0 --fee 170000 --out-file FILE_TX_MAYBE_SIGNED [--ttl 5000000] [--sign]
-    adawallet migrate-wallet --accounts-file FILE_JSON --fee 170000 --out-file FILE_TGZ [--ttl 5000000] [--sign]
+    adawallet migrate-wallet --accounts-file FILE_JSON --fee 170000 --out-file FILE_TGZ [--multiasset] [--rewards] [--ttl 5000000] [--sign]
+    adawallet version
     adawallet wipe
 
 Options:
@@ -41,17 +42,20 @@ Options:
     --accounts-file <FILE_JSON>              Specify an accounts file to perform operations on
     --address <BECH32_ADDR>                  Address as bech32
     --amount <INT>                           Amount to send
-    --delegations <FILE_JSON>                JSON file containing map of accounts to pool ids {"0": "$bech32_pool", ...}
+    --delegations <FILE_JSON>                JSON file containing map of accounts to pool ids {{"0": "$bech32_pool", ...}}
     --deposit <INT>                          Total deposits in transaction [default: 2000000]
     --drep-id <BECH32_POOL>                  Drep id hash as bech32
     --fee <INT>                              Fee to use for transaction
-    --filter-min <INT>                       Apply a filter predicate such that UTXO larger than <INT> lovelace are imported
+    --filter-min <INT>                       Apply a filter predicate such that lovelace only UTXO larger than <INT> lovelace are imported
     --hashed                                 Hash a message prior to signing per CIP-8
     --msg-file <FILE_MSG>                    A file containing a message to be signed
+    --multiasset                             Include native tokens in the transaction
     --out-file <FILE>                        Output file, type varies -- see suffix indicated in the usage section
     --payment                                Witness with payment key
     --pool-id <BECH32_POOL>                  Pool id hash as bech32
-    --recipients <FILE_JSON>                 JSON file containing map of addrs to funds to send {"$bech32_addr_recipient": $lovelace, ...}
+    --pparams-file <FILE_JSON>               JSON file containing cardano-node protocol parameters for the network your adawallet is configured for
+    --recipients <FILE_JSON>                 JSON file containing map of addrs to funds to send {{"$bech32_addr_recipient": $lovelace, ...}}
+    --rewards                                Include rewards withdrawal in the transaction
     --rosetta-url <URL>                      DEPRECATED: Rosetta URL [default: https://explorer.cardano.org/rosetta]
     --seconds <INT>                          Seconds from now for tx to live [default: 7200]
     --sign                                   Sign Transaction
@@ -69,7 +73,7 @@ Environment Variables:
     ADAWALLET_STATE                          Directory path for adawallet state; defaults to ./state-adawallet
     BLOCKFROST_API_URL                       Appropriate blockfrost base url; defaults to mainnet.  Must regex match form of: ^https://cardano-(mainnet|preview).blockfrost.io/api$
     BLOCKFROST_DISABLE                       To work with adawallet on local testnets where blockfrost is not available, blockfrost can be disabled by setting this bool to `True`
-    BLOCKFROST_PROJECT_ID                    Appropriate blockfrost project secret; no default.  Must regex match form of: ^(mainnet|preview)[A-Za-z0-9]{32}$
+    BLOCKFROST_PROJECT_ID                    Appropriate blockfrost project secret; no default.  Must regex match form of: ^(mainnet|preview)[A-Za-z0-9]{{32}}$
 
 Tips:
     * BLOCKFROST_PROJECT_ID secret env var must be set
@@ -78,25 +82,32 @@ Tips:
     * Exporting accounts will not export secrets
     * Importing accounts from exported accounts json file without secrets with not regenerate secrets
     * Use import-accounts with start and end options on fresh adawallet state for account secrets regeneration
-    * Fetch-utxos sub-command will only populate UTXO without native tokens
+    * Multiasset (native token) transactions require loading a "cardano-cli latest query protocol-parameters" json file to calculate minimum UTXO lovelace during transaction building
+    * Set an env var of DEBUG=True to enable debug logging
     * Rosetta usage is deprecated
 """
 
-import sys
-import os
 import json
-from docopt import docopt
+import os
+import sys
+from adawallet import __version__
 from adawallet.lib import AdaWallet, input_mnemonic
+from docopt import docopt
 
 if len(sys.argv) == 1:
     sys.argv.append('-h')
 
-arguments = docopt(__doc__, version='Ada Wallet 1.0')
+__doc__ = __doc__.format(version=__version__)
+arguments = docopt(__doc__, version=f"Ada Wallet {__version__}")
 state_dir = os.getenv('ADAWALLET_STATE', './state-adawallet')
 debug = os.getenv('DEBUG', 'False') == "True"
 
 adawallet = AdaWallet(state_dir, debug)
-if arguments['wipe']:
+if arguments['version']:
+    print(f"Ada Wallet {__version__}")
+    exit(0)
+
+elif arguments['wipe']:
     adawallet.wipe()
     exit(0)
 
@@ -237,17 +248,28 @@ elif arguments['fetch-utxos']:
     if adawallet.wallet_initialized:
         filter_min = int(arguments["--filter-min"]) if arguments["--filter-min"] is not None else 0
         adawallet.update_utxos_for_accounts(filter_min)
-        print("All account utxos updated")
+        print("All account UTXO updated")
+    else:
+        print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
+        exit(1)
+
+elif arguments['import-pparams']:
+    if adawallet.wallet_initialized:
+        if not arguments["--pparams-file"]:
+            print("Must include --pparams-file")
+            exit(1)
+        adawallet.import_protocol_parameters(arguments["--pparams-file"])
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
 
 elif arguments['import-utxos']:
     if adawallet.wallet_initialized:
+        filter_min = int(arguments["--filter-min"]) if arguments["--filter-min"] is not None else 0
         if not arguments["--utxo-file"]:
             print("Must include --utxo-file")
             exit(1)
-        adawallet.import_utxos_for_accounts(arguments["--utxo-file"])
+        adawallet.import_utxos_for_accounts(arguments["--utxo-file"], filter_min)
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
@@ -311,7 +333,14 @@ elif arguments['bulk-tx']:
         if not arguments["--out-file"]:
             print("Must include --out-file")
             exit(1)
-        in_total, out_total, fee, change = adawallet.build_tx(int(arguments["--account"]), arguments["--out-file"], int(arguments["--fee"]), txouts=recipients, ttl=arguments["--ttl"], sign=arguments["--sign"])
+        in_total, out_total, fee, change = adawallet.build_tx(
+            int(arguments["--account"]),
+            arguments["--out-file"],
+            int(arguments["--fee"]),
+            txouts=recipients,
+            ttl=arguments["--ttl"],
+            sign=arguments["--sign"]
+        )
         print(f"Transaction created sending {out_total} with change remaining of {change} at a fee of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
@@ -337,8 +366,18 @@ elif arguments['send-tx']:
         address = arguments["--address"]
         amount = arguments["--amount"]
         recipients = {f"{address}": int(amount)}
-        in_total, out_total, fee, change = adawallet.build_tx(int(arguments["--account"]), arguments["--out-file"], int(arguments["--fee"]), txouts=recipients, ttl=arguments["--ttl"], sign=arguments["--sign"])
-        print(f"Transaction created sending {out_total} with change remaining of {change} at a fee of {fee}")
+        in_total, out_total, fee, change = adawallet.build_tx(
+            int(arguments["--account"]),
+            arguments["--out-file"],
+            int(arguments["--fee"]),
+            txouts=recipients,
+            multiasset=arguments["--multiasset"],
+            asset_address=address if arguments["--multiasset"] else None,
+            ttl=arguments["--ttl"],
+            sign=arguments["--sign"]
+        )
+        print(f"Transaction created, {"including native tokens if available" if arguments["--multiasset"] else "excluding native tokens"}, "
+            f"sending {out_total} with change remaining of {change} at a fee of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
@@ -354,7 +393,14 @@ elif arguments['stake-registration-tx']:
         if not arguments["--out-file"]:
             print("Must include --out-file")
             exit(1)
-        in_total, out_total, fee, change = adawallet.stake_registration_tx(int(arguments["--account"]), arguments["--out-file"], int(arguments["--fee"]), deposit=int(arguments["--deposit"]), ttl=arguments["--ttl"], sign=arguments["--sign"])
+        in_total, out_total, fee, change = adawallet.stake_registration_tx(
+            int(arguments["--account"]),
+            arguments["--out-file"],
+            int(arguments["--fee"]),
+            deposit=int(arguments["--deposit"]),
+            ttl=arguments["--ttl"],
+            sign=arguments["--sign"]
+        )
         print(f"Transaction created with registration certificate with change remaining of {change} at a fee of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
@@ -368,7 +414,13 @@ elif arguments['bulk-stake-registration-tx']:
         if not arguments["--out-file"]:
             print("Must include --out-file")
             exit(1)
-        in_total, out_total, fee, change = adawallet.bulk_stake_registration_tx(arguments["--out-file"], int(arguments["--fee"]), ttl=arguments["--ttl"], sign=arguments["--sign"], deposit=int(arguments["--deposit"]))
+        in_total, out_total, fee, change = adawallet.bulk_stake_registration_tx(
+            arguments["--out-file"],
+            int(arguments["--fee"]),
+            ttl=arguments["--ttl"],
+            sign=arguments["--sign"],
+            deposit=int(arguments["--deposit"])
+        )
         print(f"Transactions created with stake registrations with change remaining of {change} at a fee of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
@@ -388,7 +440,14 @@ elif arguments['delegate-pool-tx']:
         if not arguments["--out-file"]:
             print("Must include --out-file")
             exit(1)
-        in_total, out_total, fee, change = adawallet.delegate_pool_tx(int(arguments["--account"]), arguments["--pool-id"], arguments["--out-file"], int(arguments["--fee"]), ttl=arguments["--ttl"], sign=arguments["--sign"])
+        in_total, out_total, fee, change = adawallet.delegate_pool_tx(
+            int(arguments["--account"]),
+            arguments["--pool-id"],
+            arguments["--out-file"],
+            int(arguments["--fee"]),
+            ttl=arguments["--ttl"],
+            sign=arguments["--sign"]
+        )
         print(f"Transaction created with stake delegation certificate with change remaining of {change} at a fee of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
@@ -405,7 +464,13 @@ elif arguments['bulk-delegate-pool-tx']:
         if not arguments["--delegations"]:
             print("Must include --delegations")
             exit(1)
-        in_total, out_total, fee, change = adawallet.bulk_delegate_pool_tx(arguments["--delegations"], arguments["--out-file"], int(arguments["--fee"]), ttl=arguments["--ttl"], sign=arguments["--sign"])
+        in_total, out_total, fee, change = adawallet.bulk_delegate_pool_tx(
+            arguments["--delegations"],
+            arguments["--out-file"],
+            int(arguments["--fee"]),
+            ttl=arguments["--ttl"],
+            sign=arguments["--sign"]
+        )
         print(f"Transactions created with stake delegation certificates with change remaining of {change} at a fee of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
@@ -435,7 +500,15 @@ elif arguments['delegate-vote-tx']:
         if not arguments["--out-file"]:
             print("Must include --out-file")
             exit(1)
-        in_total, out_total, fee, change = adawallet.delegate_vote_tx(int(arguments["--account"]), arguments["--voteType"], arguments["--voteTarget"], arguments["--out-file"], int(arguments["--fee"]), ttl=arguments["--ttl"], sign=arguments["--sign"])
+        in_total, out_total, fee, change = adawallet.delegate_vote_tx(
+            int(arguments["--account"]),
+            arguments["--voteType"],
+            arguments["--voteTarget"],
+            arguments["--out-file"],
+            int(arguments["--fee"]),
+            ttl=arguments["--ttl"],
+            sign=arguments["--sign"]
+        )
         print(f"Transaction created with vote delegation certificate with change remaining of {change} at a fee of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
@@ -455,8 +528,19 @@ elif arguments['drain-tx']:
         if not arguments["--out-file"]:
             print("Must include --out-file")
             exit(1)
-        in_total, out_total, fee, change = adawallet.drain_tx(int(arguments["--account"]), arguments["--address"], arguments["--out-file"], int(arguments["--fee"]), ttl=arguments["--ttl"], sign=arguments["--sign"])
-        print(f"Transaction created draining rewards with change remaining of {change} at a fee of {fee}")
+        in_total, out_total, fee, change = adawallet.drain_tx(
+            int(arguments["--account"]),
+            arguments["--address"],
+            arguments["--out-file"],
+            int(arguments["--fee"]),
+            multiasset=arguments["--multiasset"],
+            rewards=arguments["--rewards"],
+            ttl=arguments["--ttl"],
+            sign=arguments["--sign"]
+        )
+        print(f"Transaction created for drain, {"including rewards if available" if arguments["--rewards"] else "excluding rewards"}, "
+            f"{"including native tokens if available" if arguments["--multiasset"] else "excluding native tokens"}, "
+            f"change remaining of {change} at a fee of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
@@ -472,8 +556,18 @@ elif arguments['bulk-drain-tx']:
         if not arguments["--address"]:
             print("Must include --address")
             exit(1)
-        in_total, out_total, fee, change = adawallet.bulk_drain_tx(arguments["--address"], arguments["--out-file"], int(arguments["--fee"]), ttl=arguments["--ttl"], sign=arguments["--sign"])
-        print(f"Transactions draining rewards with change remaining of {change} at a fee of {fee}")
+        in_total, out_total, fee, change = adawallet.bulk_drain_tx(
+            arguments["--address"],
+            arguments["--out-file"],
+            int(arguments["--fee"]),
+            multiasset=arguments["--multiasset"],
+            rewards=arguments["--rewards"],
+            ttl=arguments["--ttl"],
+            sign=arguments["--sign"]
+        )
+        print(f"Transaction created for drain, {"including rewards if available" if arguments["--rewards"] else "excluding rewards"}, "
+            f"{"including native tokens if available" if arguments["--multiasset"] else "excluding native tokens"}, "
+            f"change remaining of {change} at a fee of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
@@ -489,8 +583,18 @@ elif arguments['migrate-wallet']:
         if not arguments["--accounts-file"]:
             print("Must include --accounts-file")
             exit(1)
-        in_total, out_total, fee, change = adawallet.migrate_wallet(arguments["--accounts-file"], arguments["--out-file"], int(arguments["--fee"]), ttl=arguments["--ttl"], sign=arguments["--sign"])
-        print(f"Transactions created to migrate wallet with total funds {out_total} and total fees of {fee}")
+        in_total, out_total, fee, change = adawallet.migrate_wallet(
+            arguments["--accounts-file"],
+            arguments["--out-file"],
+            int(arguments["--fee"]),
+            multiasset=arguments["--multiasset"],
+            rewards=arguments["--rewards"],
+            ttl=arguments["--ttl"],
+            sign=arguments["--sign"]
+        )
+        print(f"Transactions created to migrate wallet, {"including rewards if available" if arguments["--rewards"] else "excluding rewards"}, "
+            f"{"including native tokens if available" if arguments["--multiasset"] else "excluding native tokens"}, "
+            f"with total input funds of {in_total} and total fees of {fee}")
     else:
         print("No wallet exists. Please run init-hardware, init-create, init-restore or init-read-only first")
         exit(1)
