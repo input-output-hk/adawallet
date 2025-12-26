@@ -40,6 +40,8 @@
   docopt_completion = final.python3Packages.buildPythonApplication rec {
     pname = "infi.docopt_completion";
     version = "0.2.9";
+    pyproject = true;
+    build-system = [ final.python3Packages.setuptools ];
 
     propagatedBuildInputs = [
       final.python3Packages.docopt
@@ -55,6 +57,8 @@
   blockfrost = final.python3Packages.buildPythonPackage rec {
     pname = "blockfrost_python";
     version = "0.6.0";
+    pyproject = true;
+    build-system = [ final.python3Packages.setuptools ];
 
     propagatedBuildInputs = [
       final.python3Packages.requests
