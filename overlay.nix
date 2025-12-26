@@ -5,6 +5,8 @@
     pname = "adawallet";
     version = head (match ".*__version__ = \"(.*)\".*" (readFile ./adawallet/adawallet/__init__.py));
     src = ./adawallet;
+    pyproject = true;
+    build-system = [ final.python3Packages.setuptools ];
 
     propagatedBuildInputs = with final; [
       blockfrost
